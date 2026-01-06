@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3 uid="uid://dt575dsc83a4b"]
+
+[sub_resource type="GDScript" id="GDScript_7dm0k"]
+script/source = "extends Control
+
+
+func _ready() -> void:
+	$parse.pressed.connect(func():
+		var loader = script_loader.new()
+		loader.load_script($CodeEdit.text)
+	)
+"
+
+[node name="main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_7dm0k")
+
+[node name="CodeEdit" type="TextEdit" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 250.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "var typeshit = 0.0
+var invalid_int = 0.00.0
+var longass = 1000.000
+var hextest = 0xFF0000
+var binary = 0b000
+var othershit = \"string test\"
+var invalid_str = \"string test
+func _ready():
+	print(othershit)
+	yeah(typeshit)
+
+func yeah(shit:String):
+	print(shit)"
+
+[node name="parse" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -4.0
+offset_top = -8.0
+offset_right = 4.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "PARSE"
