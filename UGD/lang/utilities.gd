@@ -1,6 +1,15 @@
 class_name lang_utilities
 
 
+
+
+
+
+
+
+
+
+##scrubs comment lines from code
 static func scrub_comments(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
 	for i in code_packed.size():
@@ -19,6 +28,8 @@ static func scrub_comments(script_code:String) -> String:
 			code_packed[i] = line
 	return "\n".join(code_packed)
 
+
+##scrubs whitespace from code
 static func scrub_whitespace(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
 	var scrubbed = code_packed.duplicate()

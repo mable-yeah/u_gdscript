@@ -56,10 +56,6 @@ func _ready():
 
 func yeah(shit:String):
 	print(shit)"
-minimap_draw = true
-draw_control_chars = true
-draw_tabs = true
-draw_spaces = true
 
 [node name="parse" type="Button" parent="."]
 layout_mode = 1

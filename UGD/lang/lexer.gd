@@ -1,35 +1,69 @@
 class_name lexer
 
+
+var contains_error := false
+
 var code := "" 
 var length:int:
 	get():
 		return code.length()
 
 
-var tab_size := 4
+const tab_size := 4
 
-var column := -1
-var position := 0
+var last_newline:tokens.token = tokens.create_token()
+var pending_newline := false
+var multiline_mode := false
+var line_continuous := false
 
-var cursor_column := -1
+
+
+
+
+var pending_indents = 0
+
+var column := 0
 var cursor := 0
 
-var ch := ""
+var ch := " "
 
+var indent_char = ''
 
+var current_indent_char := ''
+
+var continuation_lines = []
+var indent_stack:Array[int] = []
 var paren_stack:Array[String] = []
 var tk_arr:Array[tokens.token] = []
 var last_token:tokens.token = tokens.create_token()
 
-func _init(p_code) -> void:
+func _init(p_code,debug_print:bool = true) -> void:
 	code = lang_utilities.scrub_comments(p_code)
-	read_char()
-	tokenize()
-	debug_token_print()
+	tokenize() 
+	
+	if debug_print and OS.has_feature("editor"): #only works inside of godot editor itself
+		debug_token_print()
 
+
+##prints the available tokens as their types, and prints literals and identifiers as '%s -> %s'
+func debug_token_print():
+	var tk_name = []
+	for token in tk_arr:
+		var append_str = ""
+		var t_str = token.get_name()
+		if t_str == "LITERAL" || t_str == 'IDENTIFIER':
+			append_str = "%s -> %s" %[t_str,token.literal]
+		else:
+			append_str = t_str
+		print(append_str)
+		tk_name.append(append_str)
+	return '\n'.join(tk_name)
+	
+
+
+##advances through the length of the code string, assigning all valid characters into tokens
 func tokenize():
 	var newtoken:tokens.token = tokens.create_token()
-	
 	while cursor <= length:
 		newtoken = next_token()
 		tk_arr.push_back(newtoken)
@@ -38,22 +72,33 @@ func tokenize():
 			break
 	return tk_arr
 
-func debug_token_print():
-	for token in tk_arr:
-		var t_str = token.get_name()
-		if t_str == "LITERAL" || t_str == 'IDENTIFIER':
-			print("%s --> %s" %[t_str,token.literal])
-		else:
-			print(t_str)
 
 
-
+##gets the current token type and advances characters, returning a new token
 func next_token() -> tokens.token:
 	var newtoken := tokens.create_token()
 	eat_whitespace()
+	var t_idx = ch
 	
+	if pending_newline:
+		pending_newline = false
+		if multiline_mode:
+			return last_newline
+	
+	if pending_indents != 0:
+		if pending_indents > 0:
+			pending_indents -= 1
+			newtoken.type = tokens.type.INDENT
+			newtoken.idx = t_idx
+			return newtoken
+		else:
+			pending_indents += 1
+			newtoken.type = tokens.type.DEDENT
+			newtoken.idx = t_idx
+			return newtoken
 	if is_at_end():
 		newtoken.type = tokens.type.TK_EOF
+		newtoken.idx = t_idx
 		return newtoken
 	
 	var t = get_token_type()
@@ -62,6 +107,7 @@ func next_token() -> tokens.token:
 	else:
 		newtoken = t
 	
+	newtoken.idx = t_idx
 	read_char()
 	return newtoken
 
@@ -74,6 +120,11 @@ func get_token_type() -> Variant: #tokens.type or a token
 	var c = ch
 	#print(c)
 	var p = peek_char()
+
+	
+	if c == '\\':
+		return handle_newline()
+	line_continuous = false
 	
 	#catch select numbers and characters as tokens before _: does hopefully
 	if is_digit(c):
@@ -263,6 +314,25 @@ func get_token_type() -> Variant: #tokens.type or a token
 const MIN_KEYWORD = 2 
 const MAX_KEYWORD = 10
 
+
+##handles a code newline/ '\' if found, else error
+func handle_newline():
+	var p = peek_char()
+	if p == '\r':
+		if peek_char(1) != '\n':
+			return make_error('unexpected carriage return char')
+		read_char()
+	if p != '\n':
+		return make_error('expected newline after \\')
+	read_char()
+	newline(false)
+	line_continuous = true
+	eat_whitespace()
+	continuation_lines.push_back(cursor)
+	return next_token()
+
+
+
 ##returns a literal token with valid keyword data if found, else error
 func potential_identifier():
 	var start = cursor - 1
@@ -405,7 +475,7 @@ func number():
 ##returns a literal token with valid string data, else error
 func string():
 	if peek_char() == 'r' || peek_char() == '^' || peek_char() ==  '&':
-			read_char()
+		read_char()
 	
 	var quote_char := peek_char(-1)
 	if peek_char() == quote_char and peek_char(1) == quote_char:
@@ -428,27 +498,80 @@ func string():
 			break
 	return make_literal(result)
 
+##returns an annotation token if found, else error
+func annotation():
+	if is_unicode_identifier(peek_char()):
+		read_char()
+	else:
+		return make_error('Expected annotation identifier after @')
+	
+	var start = cursor - 1
+	while is_unicode_identifier(peek_char()):
+		read_char()
+	
+	var a_len = cursor - start
+	var annotation_source = span(start,a_len)
+	var annotation_tk = tokens.create_token()
+	annotation_tk.type = tokens.type.ANNOTATION 
+	annotation_tk.literal = annotation_source
+	return annotation_tk
+
+
+
+
+
+
+
+
 
 func is_whitespace(st:String):  
 	return st == " " || st == "\t" || st == "\n" || st == "\r"
 
 func eat_whitespace():
-	while ch == " " || ch == "\t" || ch == "\n" || ch == "\r":
-		read_char() 
+	if pending_indents != 0:
+		return
+	
+	var beggining_of_line := column == 1
+	
+	if beggining_of_line:
+		check_indent()
+		return
+	
+	while -1:
+		match ch:
+			' ':
+				
+				read_char()
+				continue
+			'\t':
+				read_char()
+				column += tab_size - 1
+				continue
+			'\n':
+				read_char()
+				newline(!beggining_of_line)
+				check_indent()
+				continue
+			'\r':
+				read_char()
+				if peek_char() != '\n': #generate error but, forgive it kind of
+					tk_arr.append(make_error("Stray carriage return character in source code."))
+				continue
+			_:
+				return
 
 
 func peek_char(ind:int = 0) -> String:
 	var p_offs = cursor + ind
-	ch =  code[p_offs] if p_offs >= 0 and p_offs < length else ""
-	return ch
+	return code[p_offs] if p_offs >= 0 and p_offs < length else " "
 
 func read_char() -> String:
-	ch = ""
-	if not is_at_end():
-		cursor += 1
-		position += 1
-		column += 1
-	ch = peek_char(-1)
+	if is_at_end():
+		ch = ""
+		return ch
+	ch = peek_char()
+	column += 1
+	cursor += 1
 	return ch
 
 
@@ -482,7 +605,7 @@ func as_unicode(st:String) -> int:
 
 
 func is_at_end() -> bool:
-	return cursor > length
+	return cursor >= length
 
 func is_digit(st:String) -> bool:
 	return st.is_valid_int()
@@ -516,26 +639,153 @@ func paren_err(p_paren:String):
 		printerr("Closing '%s' doesn't match an opening %s" % [p_paren,paren_stack.pop_back()])
 	return tokens.type.ERROR
 
-func annotation():
-	#var annotation_source = ""
-	var annotation_tk = tokens.create_token()
-	annotation_tk.type = tokens.type.ANNOTATION 
-	#annotation.literal = annotation_source #not doing allat
-	return annotation_tk
+
+func newline(make_token:bool = false):
+	if make_token and !pending_newline and !line_continuous:
+		var token = tokens.create_token()
+		token.type = tokens.type.NEWLINE
+		pending_newline = true
+		last_newline = token
+		last_token = token
+		tk_arr.append(token)
+	column = 1 #reset column
+	#print('reset column')
+
+func check_indent():
+	if column != 1:
+		printerr('checking tokenizer indentation in the middle of a line')
+		return
+	
+	if is_at_end():
+		if line_continuous || multiline_mode:
+			return
+		pending_indents -= indent_level()
+		indent_stack.clear()
+		return
+	
+	
+	while -1:
+		#this works but peek_char needs to be -1, when the code in godot source just uses 0/the current character???
+		current_indent_char = peek_char(-1)
+		#not arguing though
+		var indent_count = 0
+		if current_indent_char != '\t' and current_indent_char != ' ':
+			#First character of the line is not any tab characters, so we clear all indentation levels.
+			#unless continuous or multiline of course
+			if line_continuous || multiline_mode:
+				return
+			pending_indents -= indent_level()
+			indent_stack.clear()
+			return
+		
+		#if peek_char() == '\r':
+			#read_char()
+			#if peek_char() != '\n':
+				#printerr('stray carriage in code')
+				#return
+
+		#if peek_char() == '\n':
+			#read_char()
+			#newline(false)
+			#continue
+
+		var mixed = false
+		while not is_at_end():
+			var space =  peek_char(-1)
+			if space == '\t':
+				column += tab_size - 1
+				indent_count += tab_size
+			elif space == ' ':
+				indent_count += 1
+			else:
+				break
+			mixed = mixed || space != current_indent_char
+			read_char()
+		if is_at_end():
+			pending_indents -= indent_level()
+			indent_stack.clear()
+			return
+		
+		#if peek_char() == '\r':
+			#read_char()
+			#if peek_char() != '\n':
+				#printerr('stray carriage in code')
+				#return
+		#if peek_char() == '\n':
+			#read_char()
+			#newline(false)
+			#continue
+		#
+		if mixed and line_continuous and !multiline_mode:
+			tk_arr.append(make_error_tk('Mixed use of tabs and spaces for indentation.'))
+			return
+		if line_continuous || multiline_mode:
+			#We cleared up all the whitespace at the beginning of the line.
+			#If this is a line continuation or we're in multiline mode then we don't want any indentation changes.
+			return
+		
+		
+		if indent_char == '':
+			print('current indent char : ',current_indent_char.c_escape())
+			#first time indenting, init stuffs
+			indent_char = current_indent_char
+		elif current_indent_char != indent_char:
+			tk_arr.append(make_error_tk('Mixed use of indentation characters, expected %s but got %s' % [indent_char.c_escape(),current_indent_char.c_escape()]))
+		
+		var previous_indent := 0
+		
+		if indent_level() > 0:
+			previous_indent = indent_stack.back()
+		if indent_count == previous_indent:
+			return #no changes
+		
+		if indent_count > previous_indent:
+			indent_stack.push_back(indent_count)
+			pending_indents += 1
+		else:
+			if indent_level() == 0:
+				tk_arr.append(make_error_tk('Tokenizer bug: trying to dedent without previous indent.'))
+				return
+			if indent_count > previous_indent:
+				indent_stack.push_back(indent_count)
+			while indent_level() > 0 and indent_stack.back() > indent_count:
+				indent_stack.pop_back()
+				pending_indents -= 1
+			if indent_level() > 0 and indent_stack.back() > indent_count || indent_level() == 0 and indent_count != 0:
+				tk_arr.append(make_error_tk("Unindent doesn't match the previous indentation level."))
+				indent_stack.push_back(indent_count)
+		#all of this could've been an email
+		break
 	
 
-#prints error message ++ returns error token
+func indent_level() -> int:
+	return indent_stack.size()
+
+#prints error message ++ returns error token (type)
 func make_error(err_str:String):
+	contains_error = true
 	printerr(err_str)
 	return tokens.type.ERROR
 
+#prints error message ++ returns error token (object)
+func make_error_tk(err_str:String):
+	var token = tokens.create_token()
+	token.type = tokens.type.ERROR
+	contains_error = true
+	printerr(err_str)
+	return token
+
+
+
+
+##creates literal token
 func make_literal(literal_str:String):
 	var token = tokens.create_token()
 	token.type = tokens.type.LITERAL
 	token.literal = literal_str
 	return token
 
-
+##creates identifier token
 func make_identifier(literal_str:String):
 	var token = tokens.create_token()
 	token.type = tokens.type.IDENTIFIER

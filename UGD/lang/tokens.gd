@@ -1,4 +1,7 @@
 class_name tokens
+
+
+##the differing available types of tokens
 enum type {
 	EMPTY,
 	# Basic
@@ -116,7 +119,7 @@ enum type {
 	TK_MAX
 }
 
-##KEYWORDS is a dict of strings that assign to specific tokens
+##KEYWORDS is a dict of strings that assign to specific token tyoes
 const KEYWORDS:Dictionary = {
 	'as': type.AS,
 	'and': type.AND,
@@ -160,20 +163,14 @@ const KEYWORDS:Dictionary = {
 	'TAU': type.CONST_TAU,
 }
 
-
-
-
-
-
-
-
-
+##creates a token and returns it
 static func create_token() -> token:
 	var tk = token.new()
 	return tk
 
 
 class token:
+	var idx = -1
 	var type:tokens.type = tokens.type.EMPTY
 	var literal:String
 	
