@@ -46,7 +46,7 @@ func _init(p_code,debug_print:bool = true) -> void:
 
 
 ##prints the available tokens as their types, and prints literals and identifiers as '%s -> %s'
-func debug_token_print():
+func debug_token_print(debug_print := true) -> String:
 	var tk_name = []
 	for token in tk_arr:
 		var append_str = ""
@@ -55,14 +55,15 @@ func debug_token_print():
 			append_str = "%s -> %s" %[t_str,token.literal]
 		else:
 			append_str = t_str
-		print(append_str)
+		if debug_print:
+			print(append_str)
 		tk_name.append(append_str)
 	return '\n'.join(tk_name)
 	
 
 
 ##advances through the length of the code string, assigning all valid characters into tokens
-func tokenize():
+func tokenize() -> Array:
 	var newtoken:tokens.token = tokens.create_token()
 	while cursor <= length:
 		newtoken = next_token()
@@ -78,7 +79,6 @@ func tokenize():
 func next_token() -> tokens.token:
 	var newtoken := tokens.create_token()
 	eat_whitespace()
-	var t_idx = ch
 	
 	if pending_newline:
 		pending_newline = false
@@ -89,16 +89,16 @@ func next_token() -> tokens.token:
 		if pending_indents > 0:
 			pending_indents -= 1
 			newtoken.type = tokens.type.INDENT
-			newtoken.idx = t_idx
+			newtoken.idx = cursor
 			return newtoken
 		else:
 			pending_indents += 1
 			newtoken.type = tokens.type.DEDENT
-			newtoken.idx = t_idx
+			newtoken.idx = cursor
 			return newtoken
 	if is_at_end():
 		newtoken.type = tokens.type.TK_EOF
-		newtoken.idx = t_idx
+		newtoken.idx = cursor
 		return newtoken
 	
 	var t = get_token_type()
@@ -107,7 +107,7 @@ func next_token() -> tokens.token:
 	else:
 		newtoken = t
 	
-	newtoken.idx = t_idx
+	newtoken.idx = cursor
 	read_char()
 	return newtoken
 
@@ -466,10 +466,10 @@ func number():
 	
 	if has_decimal && peek_char() == '.' and peek_char(1) != '.':
 		return make_error('Cannot use a decimal point twice in a number.')
-		
-		
-	var n_str = span(start,cursor - start)
-	return make_literal(n_str)
+
+	#loses hex/binary precision, but for the sake of simple validation thats fine enough for now
+	var n_literal = type_convert(span(start,cursor - start),TYPE_FLOAT if has_decimal else TYPE_INT) 
+	return make_literal(n_literal)
 
 
 ##returns a literal token with valid string data, else error
@@ -726,7 +726,7 @@ func check_indent():
 		
 		
 		if indent_char == '':
-			print('current indent char : ',current_indent_char.c_escape())
+			#print('current indent char : ',current_indent_char.c_escape())
 			#first time indenting, init stuffs
 			indent_char = current_indent_char
 		elif current_indent_char != indent_char:
@@ -771,6 +771,7 @@ func make_error(err_str:String):
 func make_error_tk(err_str:String):
 	var token = tokens.create_token()
 	token.type = tokens.type.ERROR
+	token.idx = cursor
 	contains_error = true
 	printerr(err_str)
 	return token
@@ -779,15 +780,17 @@ func make_error_tk(err_str:String):
 
 
 ##creates literal token
-func make_literal(literal_str:String):
+func make_literal(literal_str:Variant):
 	var token = tokens.create_token()
 	token.type = tokens.type.LITERAL
 	token.literal = literal_str
+	token.idx = cursor
 	return token
 
 ##creates identifier token
-func make_identifier(literal_str:String):
+func make_identifier(literal_str:Variant):
 	var token = tokens.create_token()
 	token.type = tokens.type.IDENTIFIER
 	token.literal = literal_str
+	token.idx = cursor
 	return token

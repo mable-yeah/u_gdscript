@@ -43,7 +43,6 @@ offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
 text = "@tool
-class_name yeah
 @export var yeah = false
 var typeshit:float = 0.0
 #var invalid_int = 0.00.0

@@ -5,8 +5,12 @@ class_name lang_utilities
 
 
 
-
-
+static func get_builtin_type(st_type:String) -> Variant.Type:
+	if preparser_lang.built_in_types.is_empty(): #build it if its empty
+		for i in Variant.Type.TYPE_MAX:
+			var type = i as Variant.Type
+			preparser_lang.built_in_types[type_string(type)] = type
+	return preparser_lang.built_in_types.get(st_type,Variant.Type.TYPE_MAX)
 
 
 ##scrubs comment lines from code

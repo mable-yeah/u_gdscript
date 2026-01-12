@@ -128,7 +128,7 @@ const KEYWORDS:Dictionary = {
 	'break': type.ASSERT,
 	'breakpoint': type.ASSERT,
 	'class' : type.CLASS,
-	'classname' : type.CLASS_NAME,
+	'class_name' : type.CLASS_NAME,
 	'const' : type.TK_CONST,
 	'continue' : type.CONTINUE,
 	'elif' : type.ELIF,
@@ -170,9 +170,9 @@ static func create_token() -> token:
 
 
 class token:
-	var idx = -1
+	var idx := -1
 	var type:tokens.type = tokens.type.EMPTY
-	var literal:String
+	var literal:Variant
 	
 	
 	func get_name() -> String:
