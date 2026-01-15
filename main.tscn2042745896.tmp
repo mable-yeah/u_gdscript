@@ -18,28 +18,6 @@ func _process(delta: float) -> void:
 	var static_mem = OS.get_static_memory_usage()
 	var peak_mem = OS.get_static_memory_peak_usage()
 	DisplayServer.window_set_title(mem % [String.humanize_size(static_mem),String.humanize_size(peak_mem)])
-
-
-
-
-
-
-#@tool
-#class_name yeah
-#@export var yeah = false
-#var typeshit:float = 0.0
-##var invalid_int = 0.00.0
-#var longass = 1000.000
-#var hextest = 0xFF0000
-#var binary = 0b000
-#var othershit = \"string test\"
-##var invalid_str = \"string test
-#func _ready() -> void:
-	#print(othershit)
-	#yeah(typeshit)
-#
-#func yeah(shit:String):
-	#print(shit)
 "
 
 [node name="main" type="Control"]
@@ -64,10 +42,22 @@ offset_right = 250.0
 offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "func test():
-	var x = 1
-	if x:
-		print(x)"
+text = "@tool
+class_name yeah
+@export var yeah = false
+var typeshit:float = 0.0
+#var invalid_int = 0.00.0
+var longass = 1000.000
+var hextest = 0xFF0000
+var binary = 0b000
+var othershit = \"string test\"
+#var invalid_str = \"string test
+func _ready():
+	print(othershit)
+	yeah(typeshit)
+
+func yeah(shit:String):
+	print(shit)"
 minimap_draw = true
 draw_control_chars = true
 draw_tabs = true

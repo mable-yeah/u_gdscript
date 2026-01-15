@@ -1,7 +1,10 @@
 class_name lexer
 
-
+const tk_type = tokens.type
 var contains_error := false
+
+const MIN_KEYWORD = 2 
+const MAX_KEYWORD = 10
 
 var code := "" 
 var length:int:
@@ -15,7 +18,7 @@ var last_newline:tokens.token = tokens.create_token()
 var pending_newline := false
 var multiline_mode := false
 var line_continuous := false
-
+var pending_EOF := false
 
 
 
@@ -39,13 +42,16 @@ var last_token:tokens.token = tokens.create_token()
 
 func _init(p_code,debug_print:bool = true) -> void:
 	code = lang_utilities.scrub_comments(p_code)
+	code += '\n' #add extra newline to satisfy parser
+	
 	tokenize() 
 	
-	if debug_print and OS.has_feature("editor"): #only works inside of godot editor itself
+	#make this only work inside of godot editor itself
+	if debug_print and OS.has_feature("editor"): 
 		debug_token_print()
 
 
-##prints the available tokens as their types, and prints literals and identifiers as '%s -> %s'
+##prints the available tokens as their tk_type, and prints literals and identifiers as '%s -> %s'
 func debug_token_print(debug_print := true) -> String:
 	var tk_name = []
 	for token in tk_arr:
@@ -69,7 +75,7 @@ func tokenize() -> Array:
 		newtoken = next_token()
 		tk_arr.push_back(newtoken)
 		last_token = newtoken
-		if newtoken.type == tokens.type.TK_EOF:
+		if newtoken.type == tk_type.TK_EOF:
 			break
 	return tk_arr
 
@@ -88,21 +94,27 @@ func next_token() -> tokens.token:
 	if pending_indents != 0:
 		if pending_indents > 0:
 			pending_indents -= 1
-			newtoken.type = tokens.type.INDENT
+			newtoken.type = tk_type.INDENT
 			newtoken.idx = cursor
 			return newtoken
 		else:
 			pending_indents += 1
-			newtoken.type = tokens.type.DEDENT
+			newtoken.type = tk_type.DEDENT
 			newtoken.idx = cursor
 			return newtoken
+	
 	if is_at_end():
-		newtoken.type = tokens.type.TK_EOF
-		newtoken.idx = cursor
-		return newtoken
+		if pending_EOF:
+			newtoken.type = tk_type.TK_EOF
+			newtoken.idx = cursor
+			return newtoken
+		else:
+			pending_EOF = true
+			if is_whitespace(ch) || ch == "":
+				return next_token()
 	
 	var t = get_token_type()
-	if t is tokens.type:
+	if t is tk_type:
 		newtoken.type  = t
 	else:
 		newtoken = t
@@ -113,12 +125,10 @@ func next_token() -> tokens.token:
 
 
 
-
-func get_token_type() -> Variant: #tokens.type or a token
-	var types = tokens.type
-	var type = tokens.type.ERROR
+##returns a token type based on the current ch, else generates an error token
+func get_token_type() -> Variant: #tk_type OR a token
+	var type = tk_type.ERROR
 	var c = ch
-	#print(c)
 	var p = peek_char()
 
 	
@@ -137,172 +147,174 @@ func get_token_type() -> Variant: #tokens.type or a token
 		#string literals
 		'"':
 			return string()
-		'\\':
+		"'":
 			return string()
 		#annotation
 		"@":
 			return annotation()
 		#single characters
 		"~":
-			type = types.TILDE
+			type = tk_type.TILDE
 		",":
-			type = types.COMMA
+			type = tk_type.COMMA
 		':':
-			type = types.COLON
+			type = tk_type.COLON
 		';':
-			type = types.SEMICOLON
+			type = tk_type.SEMICOLON
 		'$':
-			type = types.DOLLAR
+			type = tk_type.DOLLAR
 		'?':
-			type = types.QUESTION_MARK
+			type = tk_type.QUESTION_MARK
 		'`':
-			type = types.BACKTICK
+			type = tk_type.BACKTICK
 		#parens
 		"(":
 			push_paren(c)
-			type = types.PARENTHESIS_OPEN
+			type = tk_type.PARENTHESIS_OPEN
 		"[":
 			push_paren(c)
-			type = types.BRACKET_OPEN
+			type = tk_type.BRACKET_OPEN
 		"{":
 			push_paren(c)
-			type = types.BRACE_OPEN
+			type = tk_type.BRACE_OPEN
 		")":
 			if not pop_paren('('):
 				return paren_err(c)
-			type = types.PARENTHESIS_CLOSE
+			type = tk_type.PARENTHESIS_CLOSE
 		
 		"]":
 			if not pop_paren('['):
 				return paren_err(c)
-			type = types.BRACKET_CLOSE
+			type = tk_type.BRACKET_CLOSE
 		"}":
 			if not pop_paren('{'):
 				return paren_err(c)
-			type = types.BRACE_CLOSE
+			type = tk_type.BRACE_CLOSE
 		#double characters
 		'!':
 			if p == "=":
 				read_char()
-				type = types.BANG_EQUAL
+				type = tk_type.BANG_EQUAL
 			else:
-				type = types.BANG
+				type = tk_type.BANG
 		".":
 			if p == ".":
 				read_char()
 				p = peek_char()
 				if p == ".":
 					read_char()
-					type = types.PERIOD_PERIOD_PERIOD
+					type = tk_type.PERIOD_PERIOD_PERIOD
 				else:
-					type = types.PERIOD_PERIOD
+					type = tk_type.PERIOD_PERIOD
 			else:
-				type = types.PERIOD
+				type = tk_type.PERIOD
 		"+":
 			if p == "=":
 				read_char()
-				type = types.PLUS_EQUAL
+				type = tk_type.PLUS_EQUAL
 			elif is_digit(p) and last_token.can_precede_bin_op():
 				return number()
 			else:
-				type = types.PLUS
+				type = tk_type.PLUS
 		"-":
 			if p == "=":
 				read_char()
-				type = types.MINUS_EQUAL
+				type = tk_type.MINUS_EQUAL
 			elif is_digit(p) and last_token.can_precede_bin_op():
 				return number()
+			elif p == ">":
+				type = tk_type.FORWARD_ARROW
 			else:
-				type = types.MINUS
+				type = tk_type.MINUS
 		"*":
 			if p == "=":
 				read_char()
-				type = types.STAR_EQUAL
+				type = tk_type.STAR_EQUAL
 			elif p == "*":
 				if peek_char(1) == "=":
 					read_char()
 					read_char()
-					type = types.STAR_STAR_EQUAL
+					type = tk_type.STAR_STAR_EQUAL
 				else:
-					type = types.STAR_STAR
+					type = tk_type.STAR_STAR
 			else:
-				type = types.STAR
+				type = tk_type.STAR
 		"/":
 			if p == "=":
 				read_char()
-				type = types.SLASH_EQUAL
+				type = tk_type.SLASH_EQUAL
 			else:
-				type = types.SLASH
+				type = tk_type.SLASH
 		"%":
 			if p == "=":
 				read_char()
-				type = types.PERCENT_EQUAL
+				type = tk_type.PERCENT_EQUAL
 			else:
-				type = types.PERCENT
+				type = tk_type.PERCENT
 		"^":
 			if p == "=":
 				read_char()
-				type = types.CARET_EQUAL
+				type = tk_type.CARET_EQUAL
 			else: 
 				if p == '"' || p == '\\':
 					return string()
 				else:
-					type = types.CARET
+					type = tk_type.CARET
 		"&":
 			if p == "&":
 				read_char()
-				type = types.AMPERSAND_AMPERSAND
+				type = tk_type.AMPERSAND_AMPERSAND
 			elif p == "=":
 				read_char()
-				type = types.AMPERSAND_EQUAL
+				type = tk_type.AMPERSAND_EQUAL
 			else: 
 				if p == '"' || p == '\\':
 					return string()
 				else:
-					type = types.AMPERSAND
+					type = tk_type.AMPERSAND
 		"|":
 			if p == "|":
 				read_char()
-				type = types.PIPE_PIPE
+				type = tk_type.PIPE_PIPE
 			elif p == "=":
 				read_char()
-				type = types.PIPE_EQUAL
+				type = tk_type.PIPE_EQUAL
 			else:
-				type = types.PIPE
+				type = tk_type.PIPE
 		"=":
 			if p == "=":
 				read_char()
-				type = types.EQUAL_EQUAL
+				type = tk_type.EQUAL_EQUAL
 			else:
-				type = types.EQUAL
+				type = tk_type.EQUAL
 		"<":
 			if p == "=":
 				read_char()
-				type = types.LESS_EQUAL
+				type = tk_type.LESS_EQUAL
 			elif p == "<":
 				if peek_char(1) == '=':
 					read_char()
 					read_char()
-					type = types.LESS_LESS_EQUAL
+					type = tk_type.LESS_LESS_EQUAL
 				else:
 					read_char()
-					type = types.LESS_LESS
+					type = tk_type.LESS_LESS
 			else:
-				type = types.LESS
+				type = tk_type.LESS
 		">":
 			if p == "=":
 				read_char()
-				type = types.GREATER_EQUAL
+				type = tk_type.GREATER_EQUAL
 			elif p == ">":
 				if peek_char(1) == '=':
 					read_char()
 					read_char()
-					type = types.GREATER_GREATER_EQUAL
+					type = tk_type.GREATER_GREATER_EQUAL
 				else:
 					read_char()
-					type = types.GREATER_GREATER
+					type = tk_type.GREATER_GREATER
 			else:
-				type = types.GREATER
+				type = tk_type.GREATER
 		_:
 			if is_whitespace(c):
 				printerr("invalid whitespace char %s" % c.c_escape())
@@ -311,8 +323,7 @@ func get_token_type() -> Variant: #tokens.type or a token
 	return type
 
 
-const MIN_KEYWORD = 2 
-const MAX_KEYWORD = 10
+
 
 
 ##handles a code newline/ '\' if found, else error
@@ -347,7 +358,7 @@ func potential_identifier():
 	
 	if p_len == 1 and peek_char(-1) == '_':
 		#lone underscore
-		return tokens.type.UNDERSCORE
+		return tk_type.UNDERSCORE
 	
 	var p_str = span(start,p_len)
 	if p_len < MIN_KEYWORD || p_len > MAX_KEYWORD: #keywords are only within this range
@@ -376,7 +387,7 @@ func number():
 	var start = cursor - 1
 	var base := 10
 	var has_decimal := false
-	#var has_exponent = false
+	var has_exponent = false
 	var need_digits := false
 	var digit_check_func = digit_func._is_digit_
 	
@@ -412,6 +423,7 @@ func number():
 		else:
 			need_digits = false
 			was_underscore = false
+			
 		read_char()
 	
 	#check for it being a '..' token instead of a decimal
@@ -442,14 +454,15 @@ func number():
 	
 	if base == 10:
 		if peek_char() == 'e' || peek_char() == 'E':
-			#has_exponent = true
+			has_exponent = true
 			read_char()
 			if peek_char() == '+' || peek_char() == '-':
 				read_char()
 			if not is_digit(peek_char()):
 				return make_error('Expected exponent value after "e".')
 			was_underscore = false
-		
+	
+	#var binary = 0b012
 		while digit_check(digit_check_func,peek_char()) || peek_char() == '_':
 			var p = peek_char()
 			if p == '_':
@@ -464,11 +477,32 @@ func number():
 		printerr(digit_func.keys()[digit_check_func])
 		return make_error('expected digits')
 	
+	
 	if has_decimal && peek_char() == '.' and peek_char(1) != '.':
 		return make_error('Cannot use a decimal point twice in a number.')
-
-	#loses hex/binary precision, but for the sake of simple validation thats fine enough for now
-	var n_literal = type_convert(span(start,cursor - start),TYPE_FLOAT if has_decimal else TYPE_INT) 
+	elif is_unicode_identifier(peek_char()) || not digit_check(digit_check_func,peek_char()):
+		if !is_whitespace(peek_char()):
+			return make_error('Invalid numeric notation.')
+	#invalidate 0b00012 or 1000.0qqweqw as thats INVALID NOTATION! ! ! !
+	
+	var n_str = span(start,cursor - start)
+	var n_literal = -INF
+	
+	#on a sidenote if i wanted to add another silly digit type, it would be here
+	#since technically after this point its either a float or int
+	match base:
+		16:
+			n_literal = n_str.hex_to_int()
+		2:
+			n_literal = n_str.bin_to_int()
+		_:
+			if has_decimal || has_exponent:
+				n_literal = n_str.to_float()
+			else:
+				n_literal = n_str.to_int()
+	#also if the number is too large it generates a warning in godot itself BUT 
+	#it doesnt crash so whatevs
+	
 	return make_literal(n_literal)
 
 
@@ -512,7 +546,7 @@ func annotation():
 	var a_len = cursor - start
 	var annotation_source = span(start,a_len)
 	var annotation_tk = tokens.create_token()
-	annotation_tk.type = tokens.type.ANNOTATION 
+	annotation_tk.type = tk_type.ANNOTATION 
 	annotation_tk.literal = annotation_source
 	return annotation_tk
 
@@ -549,7 +583,9 @@ func eat_whitespace():
 				continue
 			'\n':
 				read_char()
-				newline(!beggining_of_line)
+				#skip newline token generation, if EOF is pending, as that last newline is just an extra newline
+				#to satisfy indent/dedent generation
+				newline(false if !pending_EOF else !beggining_of_line)
 				check_indent()
 				continue
 			'\r':
@@ -637,13 +673,13 @@ func paren_err(p_paren:String):
 		printerr("Closing '%s' doesn't have an opening counterpart" % p_paren)
 	else:
 		printerr("Closing '%s' doesn't match an opening %s" % [p_paren,paren_stack.pop_back()])
-	return tokens.type.ERROR
+	return tk_type.ERROR
 
 
 func newline(make_token:bool = false):
 	if make_token and !pending_newline and !line_continuous:
 		var token = tokens.create_token()
-		token.type = tokens.type.NEWLINE
+		token.type = tk_type.NEWLINE
 		pending_newline = true
 		last_newline = token
 		last_token = token
@@ -761,28 +797,25 @@ func check_indent():
 func indent_level() -> int:
 	return indent_stack.size()
 
-#prints error message ++ returns error token (type)
+##prints error message ++ returns error token (type)
 func make_error(err_str:String):
 	contains_error = true
 	printerr(err_str)
-	return tokens.type.ERROR
+	return tk_type.ERROR
 
-#prints error message ++ returns error token (object)
+##prints error message ++ returns error token (object)
 func make_error_tk(err_str:String):
 	var token = tokens.create_token()
-	token.type = tokens.type.ERROR
+	token.type = tk_type.ERROR
 	token.idx = cursor
 	contains_error = true
 	printerr(err_str)
 	return token
 
-
-
-
 ##creates literal token
 func make_literal(literal_str:Variant):
 	var token = tokens.create_token()
-	token.type = tokens.type.LITERAL
+	token.type = tk_type.LITERAL
 	token.literal = literal_str
 	token.idx = cursor
 	return token
@@ -790,7 +823,7 @@ func make_literal(literal_str:Variant):
 ##creates identifier token
 func make_identifier(literal_str:Variant):
 	var token = tokens.create_token()
-	token.type = tokens.type.IDENTIFIER
+	token.type = tk_type.IDENTIFIER
 	token.literal = literal_str
 	token.idx = cursor
 	return token

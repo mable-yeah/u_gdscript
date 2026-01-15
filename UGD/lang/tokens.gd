@@ -230,93 +230,92 @@ class token:
 			_:
 				return false
 	
-	
-func is_node_name() -> bool:
-	var types = tokens.type
-	match type:
-		types.IDENTIFIER:
-			return true
-		types.AND:
-			return true
-		types.AS:
-			return true
-		types.ASSERT:
-			return true
-		types.AWAIT:
-			return true
-		types.BREAK:
-			return true
-		types.BREAKPOINT:
-			return true
-		types.CLASS_NAME:
-			return true
-		types.CLASS:
-			return true
-		types.TK_CONST:
-			return true
-		types.CONST_PI:
-			return true
-		types.CONST_INF:
-			return true
-		types.CONST_NAN:
-			return true
-		types.CONST_TAU:
-			return true
-		types.CONTINUE:
-			return true
-		types.ELIF:
-			return true
-		types.ELSE:
-			return true
-		types.ENUM:
-			return true
-		types.EXTENDS:
-			return true
-		types.FOR:
-			return true
-		types.FUNC:
-			return true
-		types.IF:
-			return true
-		types.TK_IN:
-			return true
-		types.IS:
-			return true
-		types.MATCH:
-			return true
-		types.NAMESPACE:
-			return true
-		types.NOT:
-			return true
-		types.OR:
-			return true
-		types.PASS:
-			return true
-		types.PRELOAD:
-			return true
-		types.RETURN:
-			return true
-		types.SELF:
-			return true
-		types.SIGNAL:
-			return true
-		types.STATIC:
-			return true
-		types.SUPER:
-			return true
-		types.TRAIT:
-			return true
-		types.UNDERSCORE:
-			return true
-		types.VAR:
-			return true
-		types.TK_VOID:
-			return true
-		types.WHILE:
-			return true
-		types.WHEN:
-			return true
-		types.YIELD:
-			return true
-		_:
-			return false
+	func is_node_name() -> bool:
+		var types = tokens.type
+		match type:
+			types.IDENTIFIER:
+				return true
+			types.AND:
+				return true
+			types.AS:
+				return true
+			types.ASSERT:
+				return true
+			types.AWAIT:
+				return true
+			types.BREAK:
+				return true
+			types.BREAKPOINT:
+				return true
+			types.CLASS_NAME:
+				return true
+			types.CLASS:
+				return true
+			types.TK_CONST:
+				return true
+			types.CONST_PI:
+				return true
+			types.CONST_INF:
+				return true
+			types.CONST_NAN:
+				return true
+			types.CONST_TAU:
+				return true
+			types.CONTINUE:
+				return true
+			types.ELIF:
+				return true
+			types.ELSE:
+				return true
+			types.ENUM:
+				return true
+			types.EXTENDS:
+				return true
+			types.FOR:
+				return true
+			types.FUNC:
+				return true
+			types.IF:
+				return true
+			types.TK_IN:
+				return true
+			types.IS:
+				return true
+			types.MATCH:
+				return true
+			types.NAMESPACE:
+				return true
+			types.NOT:
+				return true
+			types.OR:
+				return true
+			types.PASS:
+				return true
+			types.PRELOAD:
+				return true
+			types.RETURN:
+				return true
+			types.SELF:
+				return true
+			types.SIGNAL:
+				return true
+			types.STATIC:
+				return true
+			types.SUPER:
+				return true
+			types.TRAIT:
+				return true
+			types.UNDERSCORE:
+				return true
+			types.VAR:
+				return true
+			types.TK_VOID:
+				return true
+			types.WHILE:
+				return true
+			types.WHEN:
+				return true
+			types.YIELD:
+				return true
+			_:
+				return false

@@ -10,7 +10,7 @@ static func get_builtin_type(st_type:String) -> Variant.Type:
 		for i in Variant.Type.TYPE_MAX:
 			var type = i as Variant.Type
 			preparser_lang.built_in_types[type_string(type)] = type
-	return preparser_lang.built_in_types.get(st_type,Variant.Type.TYPE_MAX)
+	return preparser_lang.built_in_types.get(st_type,TYPE_NIL)
 
 
 ##scrubs comment lines from code
