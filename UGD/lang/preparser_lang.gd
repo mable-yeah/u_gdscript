@@ -1,4 +1,49 @@
 class_name preparser_lang
+
+
+enum Type {
+	NONE,
+	ANNOTATION,
+	ARRAY,
+	ASSERT,
+	ASSIGNMENT,
+	AWAIT,
+	BINARY_OPERATOR,
+	BREAK,
+	BREAKPOINT,
+	CALL,
+	CAST,
+	CLASS,
+	CONSTANT,
+	CONTINUE,
+	DICTIONARY,
+	ENUM,
+	FOR,
+	FUNCTION,
+	GET_NODE,
+	IDENTIFIER,
+	IF,
+	LAMBDA,
+	LITERAL,
+	MATCH,
+	MATCH_BRANCH,
+	PARAMETER,
+	PASS,
+	PATTERN,
+	PRELOAD,
+	RETURN,
+	SELF,
+	SIGNAL,
+	SUBSCRIPT,
+	SUITE,
+	TERNARY_OPERATOR,
+	TYPE,
+	TYPE_TEST,
+	UNARY_OPERATOR,
+	VARIABLE,
+	WHILE,
+}
+
 enum TargetKind {
 	NONE = 0,
 	SCRIPT = 1 << 0,
@@ -56,6 +101,10 @@ const annotation_list := {
 #networking
 "rpc":TargetKind.FUNCTION
 }
+
+
+
+
 
 
 static var global_class_list:Array[Dictionary]:

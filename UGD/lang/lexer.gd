@@ -75,7 +75,8 @@ func tokenize() -> Array:
 		newtoken = next_token()
 		tk_arr.push_back(newtoken)
 		last_token = newtoken
-		if newtoken.type == tk_type.TK_EOF:
+		
+		if newtoken.type == tk_type.TK_EOF || contains_error:
 			break
 	return tk_arr
 
@@ -223,6 +224,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 			elif is_digit(p) and last_token.can_precede_bin_op():
 				return number()
 			elif p == ">":
+				read_char()
 				type = tk_type.FORWARD_ARROW
 			else:
 				type = tk_type.MINUS
@@ -517,7 +519,7 @@ func string():
 		read_char()
 		read_char()
 	
-	var result := quote_char
+	var result := ""
 	var string_found := false
 	while not string_found:
 		if is_at_end():
@@ -525,8 +527,8 @@ func string():
 		var p := peek_char()
 		if p == quote_char:
 			string_found = true
-		
-		result += p
+		else:
+			result += p
 		read_char()
 		if string_found:
 			break
@@ -571,7 +573,7 @@ func eat_whitespace():
 		check_indent()
 		return
 	
-	while -1:
+	while true:
 		match ch:
 			' ':
 				
@@ -585,7 +587,9 @@ func eat_whitespace():
 				read_char()
 				#skip newline token generation, if EOF is pending, as that last newline is just an extra newline
 				#to satisfy indent/dedent generation
-				newline(false if !pending_EOF else !beggining_of_line)
+				
+				
+				newline(false if pending_EOF else !beggining_of_line)
 				check_indent()
 				continue
 			'\r':
@@ -647,14 +651,15 @@ func is_digit(st:String) -> bool:
 	return st.is_valid_int()
 
 func is_hex(st:String) -> bool:
-	return is_char(st) || st.is_valid_int()
+	return is_char(st,"A-F") || st.is_valid_int()
 
 func is_binary(st:String) -> bool:
 	return st == '0' || st == '1'
 
-func is_char(st:String) -> bool:
+func is_char(st:String,ch_range := "A-Z") -> bool:
+	var ch_set = [ch_range.to_lower(),ch_range.to_upper()]
 	var regex = RegEx.new()
-	regex.compile('^[a-zA-Z]')
+	regex.compile('^[%s%s]' % ch_set)
 	var r_match = regex.search(st)
 	return r_match != null
 
@@ -700,7 +705,7 @@ func check_indent():
 		return
 	
 	
-	while -1:
+	while true:
 		#this works but peek_char needs to be -1, when the code in godot source just uses 0/the current character???
 		current_indent_char = peek_char(-1)
 		#not arguing though
@@ -766,6 +771,8 @@ func check_indent():
 			#first time indenting, init stuffs
 			indent_char = current_indent_char
 		elif current_indent_char != indent_char:
+			if current_indent_char == "" || current_indent_char == " ":
+				current_indent_char = "SPACE_SYMBOL"
 			tk_arr.append(make_error_tk('Mixed use of indentation characters, expected %s but got %s' % [indent_char.c_escape(),current_indent_char.c_escape()]))
 		
 		var previous_indent := 0

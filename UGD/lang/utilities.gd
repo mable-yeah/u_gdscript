@@ -2,9 +2,20 @@ class_name lang_utilities
 
 
 
+##return from all available classes and global classes (and types)
+static func get_class_or_type(st:String) -> Variant:
+	var t = get_builtin_type(st)
+	if t != TYPE_NIL:
+		return t
+	
+	if preparser_lang.class_list.has(st):
+		return preparser_lang.class_list.find(st)
+	
+	print(preparser_lang.global_class_list)
+	
+	return -1
 
-
-
+## 'float' -> TYPE_FLOAT
 static func get_builtin_type(st_type:String) -> Variant.Type:
 	if preparser_lang.built_in_types.is_empty(): #build it if its empty
 		for i in Variant.Type.TYPE_MAX:
