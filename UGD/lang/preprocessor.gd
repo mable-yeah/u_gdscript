@@ -27,13 +27,14 @@ var has_errors:bool:
 
 
 const tk_type = tokens.type
-
+var program := AST.PROGRAM.new()
 
 
 func _init(p_tk:Array[tokens.token]) -> void:
 	tk_arr = p_tk
 	evaluate_program()
 
+#the parser reads top to bottom, so ordering is slightly important!!
 func evaluate_program():
 	while !is_at_end(): 
 		if check(tk_type.CLASS_NAME): # // HEADER BEGIN
@@ -48,13 +49,14 @@ func evaluate_program():
 		elif check(tk_type.ANNOTATION):
 			advance()
 			make_error(global_error_types[0] % current_token.get_name())
-		elif check(tk_type.TK_CONST): #constants need to be checked before regular var's
+		elif check(tk_type.TK_CONST): 
 			advance()
 			var _declaration = parse_var_declaration(true)
 		elif check(tk_type.VAR):
 			advance()
 			var _declaration = parse_var_declaration()
-		elif check(tk_type.FUNC):
+		elif check(tk_type.FUNC): 
+			#this should send the parser into a 'sub mode' where statements are validated
 			parse_func_declaration()
 		elif check(tk_type.NEWLINE):
 			advance()
@@ -65,6 +67,9 @@ func evaluate_program():
 		if has_errors:
 			break
 	#how to teleport tutorial working 2026
+
+
+
 
 
 
@@ -80,17 +85,25 @@ func parse_func_declaration():
 
 
 
-func parse_var_declaration(is_const:bool = false):
+func parse_var_declaration(is_const:bool = false) -> AST.VarDeclStatement:
+	var statement = AST.VarDeclStatement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
 	var _type = parse_type_hint()
 	var _initializer = null
 	if check(tk_type.EQUAL):
 		advance()
-		consume(tk_type.LITERAL,'expected expression for initalizer after =')
+		_initializer = consume(tk_type.LITERAL,'expected expression for initalizer after =')
 	elif is_const:
 		make_error('expected initializer after constant name')
 	consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
-
+	
+	
+	statement.name = _name.literal
+	statement.type_hint = _type
+	statement.initializer = _initializer
+	statement.is_constant = is_const
+	
+	return statement
 
 
 
@@ -166,34 +179,122 @@ func is_at_end() -> bool:
 
 
 
-##expressions
+##expression stuff :p
 
 func parse_expression():
-	pass
+	return parse_or_expression()
 
 func parse_or_expression():
-	pass
+	var left =  parse_and_expression()
+	while check(tk_type.OR):
+		var right = parse_and_expression()
+		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
+	
+	return left
 
 func parse_and_expression():
-	pass
+	var left = parse_equality()
+	while check(tk_type.AND):
+		var right = parse_equality()
+		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
+	return left
 
 func parse_equality():
-	pass
+	var left = parse_comparison()
+	while check(tk_type.EQUAL) || check(tk_type.BANG_EQUAL):
+		var right = parse_comparison()
+		
+		var op = preparser_lang.Operation.OP_COMP_EQUAL \
+		if check(tk_type.EQUAL) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
+		
+		left = AST.Assignment.new(left,op,right)
+	
+	return left
 
 func parse_comparison():
-	pass
+	var left = parse_term()
+	
+	while check(tk_type.LESS) || check(tk_type.LESS_EQUAL) || \
+	check(tk_type.GREATER) || check(tk_type.GREATER_EQUAL):
+		var op_t = advance()
+		var right = parse_term()
+		var op
+		match op_t.type:
+			tk_type.LESS_EQUAL:
+				op = preparser_lang.Operation.OP_COMP_LESS_EQUAL
+			tk_type.LESS:
+				op = preparser_lang.Operation.OP_COMP_LESS
+			tk_type.GREATER:
+				op = preparser_lang.Operation.OP_COMP_GREATER
+			tk_type.GREATER_EQUAL:
+				op = preparser_lang.Operation.OP_COMP_GREATER_EQUAL
+			_:
+				make_error('couldnt match operation :/ %s' % op_t.get_name())
+				op = preparser_lang.Operation.OP_COMP_LESS
+		
+		
+		left = AST.Assignment.new(left,op,right)
+	
+	return left
 
 func parse_term():
-	pass
+	var left = parse_factor()
+	while check(tk_type.PLUS) || check(tk_type.MINUS):
+		var right = parse_factor()
+		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS) else preparser_lang.Operation.OP_SUBTRACTION
+		left = AST.Assignment.new(left,op,right)
+	
+	return left
 
 func parse_factor():
-	pass
+	var left = parse_unary()
+	while check(tk_type.STAR) || check(tk_type.SLASH) || check(tk_type.PERCENT):
+		var op_t = advance()
+		var right = parse_unary()
+		var op
+		
+		match op_t.type:
+			tk_type.STAR:
+				op = preparser_lang.Operation.OP_MULTIPLICATION
+			tk_type.SLASH:
+				op = preparser_lang.Operation.OP_DIVISION
+			tk_type.PERCENT:
+				op = preparser_lang.Operation.OP_MODULO
+			_:
+				make_error('couldnt match operation :/ %s' % op_t.get_name())
+				op = preparser_lang.Operation.OP_MODULO
+		
+		left = AST.Assignment.new(left,op,right)
+	return left
 
 func parse_unary():
-	pass
+	if check(tk_type.STAR,peek()) || check(tk_type.SLASH,peek()):
+		var op_t = advance()
+		
+		var operand = parse_unary()
+		var op = AST.Unary.Operation.OP_NEGATIVE if op_t.type == tk_type.MINUS else AST.Unary.Operation.OP_NOT 
+		
+		return AST.Unary.new(operand,op)
+	return parse_call()
+
 
 func parse_call():
-	pass
+	var expr = parse_primary()
+	while true:
+		if check(tk_type.PARENTHESIS_OPEN):
+			advance()
+			var arg:Array[AST.Expr] = []
+			if !check(tk_type.PARENTHESIS_CLOSE):
+				while check(tk_type.COMMA):
+					arg.push_back(parse_expression())
+			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
+			#bruh we aint ever gon get this done girl :crying_emoji:
+	return expr
 
 func parse_primary():
-	pass
+	if check(tk_type.LITERAL):
+		pass
+	
+	
+	
+	return null
