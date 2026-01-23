@@ -41,7 +41,7 @@ var tk_arr:Array[tokens.token] = []
 var last_token:tokens.token = tokens.create_token()
 
 func _init(p_code,debug_print:bool = true) -> void:
-	code = lang_utilities.scrub_comments(p_code)
+	code = lang_utilities.scrub_comments_GD(p_code)
 	code += '\n' #add extra newline to satisfy parser
 	
 	tokenize() 

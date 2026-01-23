@@ -292,9 +292,40 @@ func parse_call():
 	return expr
 
 func parse_primary():
+	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
-		pass
+		var lit:AST.literalExpr
+		match current_token.literal:
+			'true':
+				lit = AST.literalExpr.new(true)
+			'false':
+				lit = AST.literalExpr.new(false)
+			'null':
+				lit = AST.literalExpr.new(null)
+			_:
+				#digits/strings are inferred, the literal is already in the correct typing
+				lit = AST.literalExpr.new(current_token.literal)
+		advance()
+		return lit
+	
+	#VARIABLE/OBJECT NAME
+	if check(tk_type.IDENTIFIER):
+		return AST.variableExpr.new(advance().literal)
+	
+	if check(tk_type.PARENTHESIS_OPEN):
+		var expr = parse_expression()
+		consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis')
+		return expr
+	
+	#ARRAY
+	if check(tk_type.BRACKET_OPEN):
+		pass #while loop here
+	
+	#DICTIONARY
+	if check(tk_type.BRACE_OPEN):
+		pass #ANOTHER while loop here
 	
 	
 	
+	make_error('pre-processor error, expected expression :/')
 	return null

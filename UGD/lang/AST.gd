@@ -15,6 +15,27 @@ class VarDeclStatement extends Expr:
 		type = preparser_lang.Type.VARIABLE
 
 
+#variable name reference 'x'
+class variableExpr extends Expr:
+	var name = ""
+	func _init(p_name:String) -> void:
+		name = p_name
+
+
+#passing in the value 'true' should infer the type of 'bool',
+#i.e passing in the string "true" should infer 'string' 
+class literalExpr extends Expr:
+	var literal_type:Variant.Type = Variant.Type.TYPE_NIL
+	var variant:Variant = null
+	
+	
+	func _init(p_variant:Variant) -> void:
+		variant = p_variant
+		literal_type = typeof(p_variant) as Variant.Type
+		type = preparser_lang.Type.LITERAL
+#-
+
+
 class Assignment extends Expr:
 	var left:Expr
 	var op:preparser_lang.Operation
