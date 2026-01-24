@@ -22,7 +22,7 @@ static func get_builtin_type(st_type:String) -> Variant.Type:
 			preparser_lang.built_in_types[type_string(type)] = type
 	return preparser_lang.built_in_types.get(st_type,TYPE_NIL)
 
-##scrubs godot style comments
+##scrubs godot style comments, '##','#'
 static func scrub_comments_GD(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
 	for i in code_packed.size():
@@ -41,7 +41,7 @@ static func scrub_comments_GD(script_code:String) -> String:
 			code_packed[i] = line
 	return "\n".join(code_packed)
 
-##scrubs C++ style comments
+##scrubs C++ style comments, '/*','*/', '//'
 static func scrub_comments_C(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
 	var comment_block = -1

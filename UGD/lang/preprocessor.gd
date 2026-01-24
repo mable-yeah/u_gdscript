@@ -52,17 +52,19 @@ func evaluate_program():
 		elif check(tk_type.TK_CONST): 
 			advance()
 			var _declaration = parse_var_declaration(true)
+			program.globals[_declaration.name] = _declaration
 		elif check(tk_type.VAR):
 			advance()
 			var _declaration = parse_var_declaration()
+			program.globals[_declaration.name] = _declaration
 		elif check(tk_type.FUNC): 
 			#this should send the parser into a 'sub mode' where statements are validated
 			parse_func_declaration()
 		elif check(tk_type.NEWLINE):
 			advance()
 		else:
-			if current_token != null:
-				printerr(current_token.get_name())
+			#if current_token != null:
+				#printerr(current_token.get_name())
 			advance()
 		if has_errors:
 			break
@@ -92,11 +94,11 @@ func parse_var_declaration(is_const:bool = false) -> AST.VarDeclStatement:
 	var _initializer = null
 	if check(tk_type.EQUAL):
 		advance()
-		_initializer = consume(tk_type.LITERAL,'expected expression for initalizer after =')
+		_initializer = parse_expression()
+		#_initializer = consume(tk_type.LITERAL,'expected expression for initalizer after =')
 	elif is_const:
 		make_error('expected initializer after constant name')
 	consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
-	
 	
 	statement.name = _name.literal
 	statement.type_hint = _type
@@ -142,6 +144,7 @@ func consume(type:tk_type,message:String):
 
 ##matches type, doesnt throw error if false
 func check(type:tk_type,tk := peek()):
+	#printerr(tk.get_name())
 	if is_at_end() || tk == null: return false
 	return tk.type == type
 
@@ -156,17 +159,18 @@ func previous() -> tokens.token:
 	return tk_arr.get(cursor - 1)
 
 
-func peek(peel_dist = 0) -> tokens.token:
+func peek(peek_dist = 0) -> tokens.token:
 	if cursor >= length:
 		return null
-	return tk_arr.get(cursor + peel_dist)
+	return tk_arr.get(cursor + peek_dist)
 
 func advance() -> tokens.token:
+	var previous_token = peek() #required for expressions
 	if is_at_end():
 		return
 	cursor += 1
 	current_token = peek()
-	return current_token
+	return previous_token
 
 
 func is_at_end() -> bool:
@@ -181,20 +185,23 @@ func is_at_end() -> bool:
 
 ##expression stuff :p
 
+#the entering/start function for the entire expression chain
 func parse_expression():
 	return parse_or_expression()
 
 func parse_or_expression():
 	var left =  parse_and_expression()
 	while check(tk_type.OR):
+		advance()
 		var right = parse_and_expression()
 		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
-	
+
 	return left
 
 func parse_and_expression():
 	var left = parse_equality()
 	while check(tk_type.AND):
+		advance()
 		var right = parse_equality()
 		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
 	return left
@@ -202,10 +209,11 @@ func parse_and_expression():
 func parse_equality():
 	var left = parse_comparison()
 	while check(tk_type.EQUAL) || check(tk_type.BANG_EQUAL):
+		var op_t = advance()
 		var right = parse_comparison()
 		
 		var op = preparser_lang.Operation.OP_COMP_EQUAL \
-		if check(tk_type.EQUAL) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
+		if check(tk_type.EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
 		
 		left = AST.Assignment.new(left,op,right)
 	
@@ -240,8 +248,10 @@ func parse_comparison():
 func parse_term():
 	var left = parse_factor()
 	while check(tk_type.PLUS) || check(tk_type.MINUS):
+		var op_t = advance()
 		var right = parse_factor()
-		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS) else preparser_lang.Operation.OP_SUBTRACTION
+		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else preparser_lang.Operation.OP_SUBTRACTION
+		printt(preparser_lang.Operation.keys()[op],op_t.get_name())
 		left = AST.Assignment.new(left,op,right)
 	
 	return left
@@ -270,11 +280,10 @@ func parse_factor():
 func parse_unary():
 	if check(tk_type.STAR,peek()) || check(tk_type.SLASH,peek()):
 		var op_t = advance()
-		
 		var operand = parse_unary()
-		var op = AST.Unary.Operation.OP_NEGATIVE if op_t.type == tk_type.MINUS else AST.Unary.Operation.OP_NOT 
-		
+		var op = AST.Unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.Unary.Operation.OP_NOT 
 		return AST.Unary.new(operand,op)
+		
 	return parse_call()
 
 
@@ -289,6 +298,8 @@ func parse_call():
 					arg.push_back(parse_expression())
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
 			#bruh we aint ever gon get this done girl :crying_emoji:
+		else:
+			break
 	return expr
 
 func parse_primary():
@@ -319,11 +330,14 @@ func parse_primary():
 	
 	#ARRAY
 	if check(tk_type.BRACKET_OPEN):
-		pass #while loop here
+		make_error(global_error_types[0])
+		return null
+		#pass #while loop here
 	
 	#DICTIONARY
 	if check(tk_type.BRACE_OPEN):
-		pass #ANOTHER while loop here
+		make_error(global_error_types[0])
+		#pass #ANOTHER while loop here
 	
 	
 	

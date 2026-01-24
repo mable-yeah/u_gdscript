@@ -3,7 +3,14 @@ class_name AST
 #jumpy jane save me
 
 class Expr:
-	var type:preparser_lang.Type = preparser_lang.Type.NONE
+	var tk_st = "NONE" #for in editor ebugging purposes
+	#disable later
+	
+	
+	var type:preparser_lang.Type = preparser_lang.Type.NONE:
+		set(p_type):
+			type = p_type
+			tk_st = preparser_lang.Type.keys()[p_type]
 
 class VarDeclStatement extends Expr:
 	var name = ""
