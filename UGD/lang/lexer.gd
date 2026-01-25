@@ -45,7 +45,6 @@ func _init(p_code,debug_print:bool = true) -> void:
 	code += '\n' #add extra newline to satisfy parser
 	
 	tokenize() 
-	
 	#make this only work inside of godot editor itself
 	if debug_print and OS.has_feature("editor"): 
 		debug_token_print()
@@ -119,6 +118,7 @@ func next_token() -> tokens.token:
 		newtoken.type  = t
 	else:
 		newtoken = t
+		
 	
 	newtoken.idx = cursor
 	read_char()
@@ -213,7 +213,11 @@ func get_token_type() -> Variant: #tk_type OR a token
 			if p == "=":
 				read_char()
 				type = tk_type.PLUS_EQUAL
-			elif is_digit(p) and last_token.can_precede_bin_op():
+			elif is_digit(p) and not last_token.can_precede_bin_op():
+				#if the last token can precede an op, then treat this token like its actual token type
+				#else treat it like a number
+				#'1+1' or '1 + 1' both generate the same way, along with any other variation of that
+				#BUT '1+-1' generates a one token, a plus token and a negative one token
 				return number()
 			else:
 				type = tk_type.PLUS
@@ -221,7 +225,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 			if p == "=":
 				read_char()
 				type = tk_type.MINUS_EQUAL
-			elif is_digit(p) and last_token.can_precede_bin_op():
+			elif is_digit(p) and not last_token.can_precede_bin_op():
 				return number()
 			elif p == ">":
 				read_char()
@@ -392,8 +396,8 @@ func number():
 	var has_exponent = false
 	var need_digits := false
 	var digit_check_func = digit_func._is_digit_
-	
-	if (peek_char(-1) == '+' || peek_char(-1) == '-' and peek_char() == '0'):
+
+	if (peek_char(-1) == '+' || peek_char(-1) == '-' || peek_char() == '0'):
 		read_char()
 	
 	if peek_char(-1) == '.':
@@ -416,16 +420,16 @@ func number():
 		return make_error('unexpected underscore after 0%s' % peek_char(-1))
 	
 	var was_underscore := false
+	
 	while digit_check(digit_check_func,peek_char()) || peek_char() == '_':
 		var p = peek_char()
 		if p == '_':
 			if was_underscore:
-				return make_error('multiple underscores cannot be placed in a numeric literal')
+				return make_error('multiple underscores cannot be placed adjacently in a numeric literal')
 			was_underscore = true
 		else:
 			need_digits = false
 			was_underscore = false
-			
 		read_char()
 	
 	#check for it being a '..' token instead of a decimal
@@ -444,6 +448,7 @@ func number():
 		if peek_char() == '_': #allow 10.0 not 10._ 
 			return make_error('unexpected underscore after decimal point')
 		was_underscore = false
+		
 		while digit_check(digit_check_func,peek_char()) || peek_char() == '_':
 			var p = peek_char()
 			if p == '_':
@@ -454,6 +459,7 @@ func number():
 				was_underscore = false
 			read_char()
 	
+
 	if base == 10:
 		if peek_char() == 'e' || peek_char() == 'E':
 			has_exponent = true
@@ -474,7 +480,7 @@ func number():
 			else:
 				was_underscore = false
 			read_char()
-	
+
 	if need_digits:
 		printerr(digit_func.keys()[digit_check_func])
 		return make_error('expected digits')
@@ -483,8 +489,9 @@ func number():
 	if has_decimal && peek_char() == '.' and peek_char(1) != '.':
 		return make_error('Cannot use a decimal point twice in a number.')
 	elif is_unicode_identifier(peek_char()) || not digit_check(digit_check_func,peek_char()):
-		if !is_whitespace(peek_char()):
-			return make_error('Invalid numeric notation.')
+		if is_char(peek_char()):
+			return make_error('Invalid numeric notation. %s...' % span(start,cursor - start))
+	
 	#invalidate 0b00012 or 1000.0qqweqw as thats INVALID NOTATION! ! ! !
 	
 	var n_str = span(start,cursor - start)
@@ -649,6 +656,7 @@ func is_at_end() -> bool:
 
 func is_digit(st:String) -> bool:
 	return st.is_valid_int()
+
 
 func is_hex(st:String) -> bool:
 	return is_char(st,"A-F") || st.is_valid_int()
