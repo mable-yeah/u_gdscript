@@ -39,32 +39,40 @@ func evaluate_program():
 	while !is_at_end(): 
 		if check(tk_type.CLASS_NAME): # // HEADER BEGIN
 			advance()
-			consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name')
+			var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
+			if has_errors:
+				continue
+			if program.class_n == "":
+				program.class_n = c_tk.literal
+				continue
+			make_error('class name is already defined as "%s" in this context' %[program.class_n])
 		if check(tk_type.EXTENDS):
 			advance()
-			consume(tk_type.IDENTIFIER,'expected identifier / valid class name after extends')
+			make_error(global_error_types[0] % previous().get_name())
 			skip_newlines() # // HEADER END
 		
 		#rest of this is body
 		elif check(tk_type.ANNOTATION):
 			advance()
-			make_error(global_error_types[0] % current_token.get_name())
+			make_error(global_error_types[0] % previous().get_name())
 		elif check(tk_type.TK_CONST): 
 			advance()
 			var _declaration = parse_var_declaration(true)
-			program.globals[_declaration.name] = _declaration
+			var valid = program.declare_global_Var(_declaration.name,_declaration)
+			if not valid:
+				make_error('variant "%s" is already a declared constant variable in this context' % _declaration.name)
 		elif check(tk_type.VAR):
 			advance()
 			var _declaration = parse_var_declaration()
-			program.globals[_declaration.name] = _declaration
+			var valid = program.declare_global_Var(_declaration.name,_declaration)
+			if not valid:
+				make_error('variant "%s" is already a declared variable in this context' % _declaration.name)
+			
 		elif check(tk_type.FUNC): 
-			#this should send the parser into a 'sub mode' where statements are validated
 			parse_func_declaration()
 		elif check(tk_type.NEWLINE):
 			advance()
 		else:
-			#if current_token != null:
-				#printerr(current_token.get_name())
 			advance()
 		if has_errors:
 			break
@@ -83,22 +91,63 @@ func skip_newlines():
 
 func parse_func_declaration():
 	advance()
-	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
+	var statement = AST.funcDeclStatement.new()
+	var _name = consume(tk_type.IDENTIFIER,'expected variable name')
+	var _type = null
+	var params:Dictionary[String,AST.Expr]
+	
+	#define parameters 
+	consume(tk_type.PARENTHESIS_OPEN, "expected '(' after function name")
+	if !check(tk_type.PARENTHESIS_CLOSE):
+		while true:
+			var expression = parse_var_declaration(false,false)
+			if params.has(expression.name):
+				make_error('Parameter "%s" was already declared for this function' % expression.name)
+				break
+			params[expression.name] = expression
+			
+			if !check(tk_type.COMMA):
+				break
+			advance()
+	consume(tk_type.PARENTHESIS_CLOSE, "expected ')' after parameters")
+	
+	
+	if check(tk_type.FORWARD_ARROW):
+		advance()
+		_type = consume(tk_type.IDENTIFIER,'expected identifier after "->", got "%s"')
+	consume(tk_type.COLON, "expected ':' after function declaration")
+	skip_newlines()
+	consume(tk_type.INDENT,'expected indent after function declaration')
+	
+	
+	
+	
+	
+	
+	statement.type_hint = _type
+	statement.params = params
+	statement.name = _name.literal
+	return statement
 
 
 
-func parse_var_declaration(is_const:bool = false) -> AST.VarDeclStatement:
+
+
+
+func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.VarDeclStatement:
 	var statement = AST.VarDeclStatement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
-	var _type = parse_type_hint()
+	var _type = parse_var_type_hint()
 	var _initializer = null
+	
 	if check(tk_type.EQUAL):
 		advance()
 		_initializer = parse_expression()
-		#_initializer = consume(tk_type.LITERAL,'expected expression for initalizer after =')
 	elif is_const:
 		make_error('expected initializer after constant name')
-	consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
+	
+	if expect_newline:
+		consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
 	
 	statement.name = _name.literal
 	statement.type_hint = _type
@@ -107,10 +156,8 @@ func parse_var_declaration(is_const:bool = false) -> AST.VarDeclStatement:
 	
 	return statement
 
-
-
 ##return identifier token containing the 'type' needed, else null
-func parse_type_hint() -> tokens.token:
+func parse_var_type_hint() -> tokens.token:
 	if not check(tk_type.COLON):
 		return
 	advance()

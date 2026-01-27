@@ -7,7 +7,7 @@ var loader:script_loader = null
 func _ready() -> void:
 	$parse.pressed.connect(func():
 		loader = script_loader.new()
-		loader.load_script($CodeEdit.text)
+		loader.load_string($CodeEdit.text)
 		$RichTextLabel.text = loader.lex.debug_token_print(false)
 		#$CodeEdit.text = $CodeEdit.text.c_escape()
 	)

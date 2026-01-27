@@ -3,7 +3,7 @@ class_name AST
 #jumpy jane save me
 
 class Expr:
-	var tk_st = "NONE" #for in editor ebugging purposes
+	var tk_st = "NONE" #for in editor debugging purposes
 	#disable later
 	
 	
@@ -20,7 +20,7 @@ class VarDeclStatement extends Expr:
 	
 	func _init() -> void:
 		type = preparser_lang.Type.VARIABLE
-
+	
 
 #variable name reference 'x'
 class variableExpr extends Expr:
@@ -69,7 +69,7 @@ class Unary extends Expr:
 class funcDeclStatement extends Expr:
 	var name = ""
 	var type_hint:tokens.token # -> (TYPE)
-	var params:Array[VarDeclStatement]
+	var params:Dictionary[String,Expr]
 	
 	func _init() -> void:
 		type = preparser_lang.Type.FUNCTION
@@ -78,6 +78,16 @@ class funcDeclStatement extends Expr:
 
 
 class PROGRAM: 
+	var class_n:String 
+	#var extends_n:String
 	#these are dictionarys so i can double check for already declared variables/functions
-	var globals:Dictionary[String,VarDeclStatement]
+	var globals:Dictionary[String,Expr]
 	var functions:Dictionary
+	
+	
+	#returns true if valid else false
+	func declare_global_Var(Name:String,VarEXP:Expr):
+		if globals.has(Name):
+			return false
+		globals[Name] = VarEXP
+		return true

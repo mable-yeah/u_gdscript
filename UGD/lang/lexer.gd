@@ -140,7 +140,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 	#catch select numbers and characters as tokens before _: does hopefully
 	if is_digit(c):
 		return number()
-	elif is_unicode_identifier(c): 
+	elif is_unicode_identifier_start(c):
 		return potential_identifier()
 	
 	
@@ -355,7 +355,7 @@ func potential_identifier():
 	var start = cursor - 1
 	var only_ascii = as_unicode(peek_char(-1)) < 128
 	
-	while is_unicode_identifier(peek_char()):
+	while is_unicode_identifier_continue(peek_char()):
 		var c = as_unicode(read_char())
 		only_ascii = only_ascii and c < 128
 	
@@ -367,6 +367,7 @@ func potential_identifier():
 		return tk_type.UNDERSCORE
 	
 	var p_str = span(start,p_len)
+	
 	if p_len < MIN_KEYWORD || p_len > MAX_KEYWORD: #keywords are only within this range
 		return make_identifier(p_str)
 	
@@ -386,6 +387,8 @@ func potential_identifier():
 		if p_str == 'false':
 			return make_literal('false');
 	return make_identifier(p_str)
+
+
 
 
 ##returns a literal token with valid number data if found, else error
@@ -488,7 +491,7 @@ func number():
 	
 	if has_decimal && peek_char() == '.' and peek_char(1) != '.':
 		return make_error('Cannot use a decimal point twice in a number.')
-	elif is_unicode_identifier(peek_char()) || not digit_check(digit_check_func,peek_char()):
+	elif is_unicode_identifier_start(peek_char()) || not digit_check(digit_check_func,peek_char()):
 		if is_char(peek_char()):
 			return make_error('Invalid numeric notation. %s...' % span(start,cursor - start))
 	
@@ -543,13 +546,13 @@ func string():
 
 ##returns an annotation token if found, else error
 func annotation():
-	if is_unicode_identifier(peek_char()):
+	if is_unicode_identifier_start(peek_char()):
 		read_char()
 	else:
 		return make_error('Expected annotation identifier after @')
 	
 	var start = cursor - 1
-	while is_unicode_identifier(peek_char()):
+	while is_unicode_identifier_continue(peek_char()):
 		read_char()
 	
 	var a_len = cursor - start
@@ -644,8 +647,18 @@ func digit_check(digit_check_func:digit_func,st:String):
 func span(start:int,end:int) -> String:
 	return code.substr(start,end)
 
-func is_unicode_identifier(st:String) -> bool:
+
+#both of these are neccessary in order to match correct literal naming schemes
+func is_unicode_identifier_start(st:String) -> bool:
 	return st.is_valid_unicode_identifier()
+
+func is_unicode_identifier_continue(st:String) -> bool:
+	return st.is_valid_unicode_identifier() || st.is_valid_int()
+
+#essentially asking if its a valid letter/underscore
+#and reading as a valid letter/underscore/int until invalid (white space or otherwise)
+
+
 
 func as_unicode(st:String) -> int:
 	return st.unicode_at(0)
