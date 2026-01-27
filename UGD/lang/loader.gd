@@ -1,4 +1,8 @@
 class_name script_loader
+#TODO
+#add script loader hints through ::HINT_NAME
+#ideally this would be through the tokenizer 
+
 
 var DB = ClassDB
 

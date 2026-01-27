@@ -104,6 +104,10 @@ func parse_func_declaration():
 			if params.has(expression.name):
 				make_error('Parameter "%s" was already declared for this function' % expression.name)
 				break
+			if expression == null:
+				make_error('null as expression :/')
+				break
+			
 			params[expression.name] = expression
 			
 			if !check(tk_type.COMMA):
@@ -298,7 +302,6 @@ func parse_term():
 		var op_t = advance()
 		var right = parse_factor()
 		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else preparser_lang.Operation.OP_SUBTRACTION
-		printt(preparser_lang.Operation.keys()[op],op_t.get_name())
 		left = AST.Assignment.new(left,op,right)
 	
 	return left
@@ -371,19 +374,40 @@ func parse_primary():
 		return AST.variableExpr.new(advance().literal)
 	
 	if check(tk_type.PARENTHESIS_OPEN):
+		advance()
 		var expr = parse_expression()
 		consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis')
 		return expr
 	
 	#ARRAY
 	if check(tk_type.BRACKET_OPEN):
-		make_error(global_error_types[0])
-		return null
-		#pass #while loop here
+		var expr = AST.array.new()
+		advance()
+		if check(tk_type.BRACKET_CLOSE): #empty array
+			advance()
+			return expr
+		
+		while true:
+			if check(tk_type.BRACKET_CLOSE):
+				break
+			var tk = parse_expression()
+			if has_errors:
+				return null
+			expr.elements.append(tk)
+			if !check(tk_type.COMMA):
+				break
+			advance()
+		consume(tk_type.BRACKET_CLOSE,'expected closing bracket')
+		return expr
 	
 	#DICTIONARY
 	if check(tk_type.BRACE_OPEN):
 		make_error(global_error_types[0])
+		#var expr = AST.dictionary.new()
+		#advance()
+		#
+		#return expr
+		
 		#pass #ANOTHER while loop here
 	
 	

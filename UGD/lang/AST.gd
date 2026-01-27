@@ -25,6 +25,7 @@ class VarDeclStatement extends Expr:
 #variable name reference 'x'
 class variableExpr extends Expr:
 	var name = ""
+	
 	func _init(p_name:String) -> void:
 		name = p_name
 
@@ -74,12 +75,22 @@ class funcDeclStatement extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.FUNCTION
 
+class array extends Expr:
+	var elements:Array[Expr] = []
+	
+	func _init() -> void:
+		type = preparser_lang.Type.ARRAY
 
-
+class dictionary extends Expr:
+	var elements:Dictionary = {}
+	
+	func _init() -> void:
+		type = preparser_lang.Type.DICTIONARY
 
 class PROGRAM: 
 	var class_n:String 
 	#var extends_n:String
+	
 	#these are dictionarys so i can double check for already declared variables/functions
 	var globals:Dictionary[String,Expr]
 	var functions:Dictionary
