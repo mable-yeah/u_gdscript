@@ -15,4 +15,4 @@ func load_string(code):
 	lex = lexer.new(source_code,false)
 	if lex.contains_error:
 		return
-	p_processor = preprocessor.new(lex.tk_arr)
+	#p_processor = preprocessor.new(lex.tk_arr)

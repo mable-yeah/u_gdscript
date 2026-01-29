@@ -72,9 +72,28 @@ class funcDeclStatement extends Expr:
 	var name = ""
 	var type_hint:tokens.token # -> (TYPE)
 	var params:Dictionary[String,Expr]
+	var body:Array = []
 	
 	func _init() -> void:
 		type = preparser_lang.Type.FUNCTION
+
+
+
+
+class pass_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.PASS
+
+class cont_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.CONTINUE
+
+class break_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.BREAK
+
+
+
 
 
 class array extends Expr:
@@ -82,6 +101,20 @@ class array extends Expr:
 	
 	func _init() -> void:
 		type = preparser_lang.Type.ARRAY
+
+
+class if_Statement extends Expr:
+	var condition:Expr
+	
+	var _then:Array[Expr] = []
+	
+	var _else:Array[Expr] = []
+	
+	func _init(p_condition:Expr,p_then:Array[Expr],p_else:Array[Expr]) -> void:
+		type = preparser_lang.Type.IF
+		condition = p_condition
+		_then = p_then
+		_else = p_else
 
 class dictionary extends Expr:
 	enum styling {
@@ -115,10 +148,18 @@ class PROGRAM:
 	var globals:Dictionary[String,Expr]
 	var functions:Dictionary
 	
-	
-	#returns true if valid else false
+	##defines a variable into the globals array
+	##returns true if valid else false
 	func declare_global_Var(Name:String,VarEXP:Expr):
 		if globals.has(Name):
 			return false
 		globals[Name] = VarEXP
+		return true
+	
+	##defines a function into the functions array
+	##returns true if valid else false
+	func declare_func(Name:String,VarEXP:Expr):
+		if functions.has(Name):
+			return false
+		functions[Name] = VarEXP
 		return true

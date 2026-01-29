@@ -42,7 +42,14 @@ var last_token:tokens.token = tokens.create_token()
 
 func _init(p_code,debug_print:bool = true) -> void:
 	code = lang_utilities.scrub_comments_GD(p_code)
-	code += '\n' #add extra newline to satisfy parser
+	
+	code = code.insert(0,'\n') + '\n' 
+	#since i cant directly manage the start and ending of the file
+	#both ends are represented by an extra new line
+	#this helps the parser not tweak out when indenting on the first line
+	#and helps it dedent on the last one
+	
+	
 	
 	tokenize() 
 	#make this only work inside of godot editor itself
@@ -66,6 +73,14 @@ func debug_token_print(debug_print := true) -> String:
 	return '\n'.join(tk_name)
 	
 
+#handles beggining of file stuff
+#func handle_BOF():
+	#read_char()
+	#check_indent()
+	#if indent_level() == 0:
+		#column -= 1
+		#cursor -= 1
+		#ch = peek_char()
 
 ##advances through the length of the code string, assigning all valid characters into tokens
 func tokenize() -> Array:
@@ -794,6 +809,8 @@ func check_indent():
 		elif current_indent_char != indent_char:
 			if current_indent_char == "" || current_indent_char == " ":
 				current_indent_char = "SPACE_SYMBOL"
+			if indent_char == "" || indent_char == " ":
+				indent_char = "SPACE_SYMBOL"
 			tk_arr.append(make_error_tk('Mixed use of indentation characters, expected %s but got %s' % [indent_char.c_escape(),current_indent_char.c_escape()]))
 		
 		var previous_indent := 0

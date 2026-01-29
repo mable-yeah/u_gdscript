@@ -1,5 +1,7 @@
 class_name preprocessor
 
+
+
 var tk_arr:Array[tokens.token] = []
 var length:int:
 	get():
@@ -73,9 +75,17 @@ func evaluate_program():
 				make_error('variant "%s" is already a declared variable in this context' % _declaration.name)
 			
 		elif check(tk_type.FUNC): 
-			parse_func_declaration()
+			var _declaration = parse_func_declaration()
+			if has_errors:
+				break
+			var valid = program.declare_func(_declaration.name,_declaration)
+			if not valid:
+				make_error('function "%s" is already a declared variable in this context' % _declaration.name)
+			
+		if check(tk_type.INDENT):
+			make_error('indent in class body')
 		elif check(tk_type.NEWLINE):
-			advance()
+			skip_newlines()
 		else:
 			advance()
 		if has_errors:
@@ -122,26 +132,101 @@ func parse_func_declaration():
 	
 	if check(tk_type.FORWARD_ARROW):
 		advance()
-		_type = consume(tk_type.IDENTIFIER,'expected identifier after "->", got "%s"')
-	consume(tk_type.COLON, "expected ':' after function declaration")
+		if check(tk_type.IDENTIFIER) || check(tk_type.TK_VOID):
+			_type = advance()
+		else:
+			make_error('expected identifier or void after "->", got "%s"' % peek())
+		
+	consume(tk_type.COLON,'expected ":" after function declaration, got "%s"')
 	skip_newlines()
 	consume(tk_type.INDENT,'expected indent after function declaration')
-	
-	
-	
-	
-	
-	
+
+	statement.body = parse_func_scope()
 	statement.type_hint = _type
 	statement.params = params
 	statement.name = _name.literal
+	
 	return statement
 
 
+func parse_func_scope() -> Array:
+	if has_errors:
+		return []
+	var lines = []
+	while (!check(tk_type.DEDENT) and !is_at_end()):
+		skip_newlines()
+		if (!check(tk_type.DEDENT) and !is_at_end()):
+			lines.push_back(parse_current_scope())
+	consume(tk_type.DEDENT,'expected dedent after function body')
+	return lines
+
+func parse_current_scope():
+	skip_newlines()
+	
+	if check(tk_type.VAR) || check(tk_type.TK_CONST):
+		var is_const = check(tk_type.TK_CONST)
+		advance()
+		return parse_var_declaration(is_const)
+	
+	if check(tk_type.IF):
+		return parse_if()
+	
+	if check(tk_type.WHILE):
+		pass
+	
+	if check(tk_type.FOR):
+		pass
+	
+	if check(tk_type.RETURN):
+		pass
+	
+	if check(tk_type.BREAK):
+		advance()
+		return AST.break_Statement.new()
+	
+	if check(tk_type.PASS):
+		advance()
+		return AST.pass_Statement.new()
+	
+	if check(tk_type.CONTINUE):
+		advance()
+		return AST.cont_Statement.new()
+
+	make_error('unexpected token type "%s" in function body' % peek().get_name())
+	advance()
+	return null
 
 
 
 
+func parse_if():
+	advance()
+	var expression = parse_expression()
+	consume(tk_type.COLON,'expected ":" after if statement')
+	skip_newlines()
+	consume(tk_type.INDENT,'expected "indent" after if statement')
+	
+	if has_errors:
+		return null
+	
+	var then_expr:Array[AST.Expr] = [parse_current_scope()]
+	var else_expr:Array[AST.Expr] = []
+	
+	skip_newlines()
+	if check(tk_type.ELIF):
+		else_expr.push_back(parse_if())
+	elif check(tk_type.ELSE):
+		consume(tk_type.COLON,'expected ":" after else')
+		skip_newlines()
+		consume(tk_type.INDENT,'expected "indent" after if statement')
+		else_expr.append(parse_current_scope())
+	if has_errors:
+		return null
+	return AST.if_Statement.new(expression,then_expr,else_expr)
+
+
+
+#starts after 'var' not at 'var', so advance/consume before calling this
 func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.VarDeclStatement:
 	var statement = AST.VarDeclStatement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
@@ -178,16 +263,13 @@ func parse_var_type_hint() -> tokens.token:
 	if check(tk_type.IDENTIFIER):
 		var t := peek()
 		advance()
-		return t #here its 'int'
+		return t 
 	elif check(tk_type.EQUAL):
 		return null 
 		#return null silently, get it filled by the parsed expression's final type later on
 	else:
-		make_error('expected/missing type identifier after ":"')
+		make_error('expected/missing type identifier after ":", found %s' %peek().get_name())
 		return null
-	#this should allow for ':int' as well as ':= 1' as valid typing
-	#awell as allowing custom types and certain exposed classes to be used
-	#since the check for that should happen, after the preprocessor
 
 
 ##advances the parser if the type matches, else error
@@ -244,7 +326,7 @@ func is_at_end() -> bool:
 
 ##expression stuff :p
 
-#the entering/start function for the entire expression chain
+##the entering/start function for the entire expression chain
 func parse_expression(can_assign:=true):
 	return parse_or_expression(can_assign)
 
@@ -466,5 +548,5 @@ func parse_primary():
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
 		return expr
 	
-	make_error('pre-processor error, expected expression :/')
+	make_error('pre-processor error, expected expression :/, %s' % peek().get_name())
 	return null
