@@ -58,12 +58,16 @@ func evaluate_program():
 		elif check(tk_type.TK_CONST): 
 			advance()
 			var _declaration = parse_var_declaration(true)
+			if has_errors:
+				break
 			var valid = program.declare_global_Var(_declaration.name,_declaration)
 			if not valid:
 				make_error('variant "%s" is already a declared constant variable in this context' % _declaration.name)
 		elif check(tk_type.VAR):
 			advance()
 			var _declaration = parse_var_declaration()
+			if has_errors:
+				break
 			var valid = program.declare_global_Var(_declaration.name,_declaration)
 			if not valid:
 				make_error('variant "%s" is already a declared variable in this context' % _declaration.name)
@@ -142,11 +146,16 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 	var statement = AST.VarDeclStatement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
 	var _type = parse_var_type_hint()
+	if has_errors:
+		return statement
 	var _initializer = null
 	
 	if check(tk_type.EQUAL):
 		advance()
 		_initializer = parse_expression()
+		if has_errors:
+			return statement
+	
 	elif is_const:
 		make_error('expected initializer after constant name')
 	
@@ -165,15 +174,16 @@ func parse_var_type_hint() -> tokens.token:
 	if not check(tk_type.COLON):
 		return
 	advance()
-	#return the token that contains the supposed 'type' we need
+	#return the token that contains the supposed 'type' we need.. or null
 	if check(tk_type.IDENTIFIER):
 		var t := peek()
 		advance()
 		return t #here its 'int'
 	elif check(tk_type.EQUAL):
-		return peek(1) #here its 1
+		return null 
+		#return null silently, get it filled by the parsed expression's final type later on
 	else:
-		make_error('expected/missing identifier after ":"')
+		make_error('expected/missing type identifier after ":"')
 		return null
 	#this should allow for ':int' as well as ':= 1' as valid typing
 	#awell as allowing custom types and certain exposed classes to be used
@@ -225,9 +235,7 @@ func advance() -> tokens.token:
 
 
 func is_at_end() -> bool:
-	if current_token == null:
-		return false
-	return current_token.type == tk_type.TK_EOF
+	return peek() == null or peek().type == tk_type.TK_EOF
 
 
 
@@ -237,36 +245,37 @@ func is_at_end() -> bool:
 ##expression stuff :p
 
 #the entering/start function for the entire expression chain
-func parse_expression():
-	return parse_or_expression()
+func parse_expression(can_assign:=true):
+	return parse_or_expression(can_assign)
 
-func parse_or_expression():
-	var left =  parse_and_expression()
+func parse_or_expression(can_assign):
+	var left =  parse_and_expression(can_assign)
 	while check(tk_type.OR):
 		advance()
-		var right = parse_and_expression()
+		var right = parse_and_expression(can_assign)
 		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
 
 	return left
 
-func parse_and_expression():
-	var left = parse_equality()
+func parse_and_expression(can_assign):
+	var left = parse_equality(can_assign)
 	while check(tk_type.AND):
 		advance()
-		var right = parse_equality()
+		var right = parse_equality(can_assign)
 		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
 	return left
 
-func parse_equality():
+func parse_equality(can_assign):
 	var left = parse_comparison()
-	while check(tk_type.EQUAL) || check(tk_type.BANG_EQUAL):
-		var op_t = advance()
-		var right = parse_comparison()
-		
-		var op = preparser_lang.Operation.OP_COMP_EQUAL \
-		if check(tk_type.EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
-		
-		left = AST.Assignment.new(left,op,right)
+	if can_assign:
+		while check(tk_type.EQUAL) || check(tk_type.BANG_EQUAL):
+			var op_t = advance()
+			var right = parse_comparison()
+			
+			var op = preparser_lang.Operation.OP_COMP_EQUAL \
+			if check(tk_type.EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
+			
+			left = AST.Assignment.new(left,op,right)
 	
 	return left
 
@@ -328,7 +337,7 @@ func parse_factor():
 	return left
 
 func parse_unary():
-	if check(tk_type.STAR,peek()) || check(tk_type.SLASH,peek()):
+	if check(tk_type.MINUS,peek()) || check(tk_type.NOT,peek()):
 		var op_t = advance()
 		var operand = parse_unary()
 		var op = AST.Unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.Unary.Operation.OP_NOT 
@@ -344,13 +353,21 @@ func parse_call():
 			advance()
 			var arg:Array[AST.Expr] = []
 			if !check(tk_type.PARENTHESIS_CLOSE):
-				while check(tk_type.COMMA):
+				while true:
 					arg.push_back(parse_expression())
+					if !check(tk_type.COMMA):
+						break
+					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
 			#bruh we aint ever gon get this done girl :crying_emoji:
 		else:
 			break
 	return expr
+
+	
+
+
+
 
 func parse_primary():
 	#BUILT IN VALUES/ DIGITS, STRINGS
@@ -397,20 +414,57 @@ func parse_primary():
 			if !check(tk_type.COMMA):
 				break
 			advance()
-		consume(tk_type.BRACKET_CLOSE,'expected closing bracket')
+		consume(tk_type.BRACKET_CLOSE,'expected closing bracket in array')
 		return expr
 	
 	#DICTIONARY
 	if check(tk_type.BRACE_OPEN):
-		make_error(global_error_types[0])
-		#var expr = AST.dictionary.new()
-		#advance()
-		#
-		#return expr
+		var style = AST.dictionary.styling
+		var expr = AST.dictionary.new()
+		var check_token = null
+		advance()
+		if check(tk_type.BRACE_CLOSE): #empty dict
+			advance()
+			return expr
 		
-		#pass #ANOTHER while loop here
-	
-	
+		while true:
+			skip_newlines()
+			
+			var key = parse_expression(false)
+			if has_errors:
+				return null
+			
+			expr.decide_style(check(tk_type.EQUAL),check(tk_type.COLON))
+			if expr.style == style.NONE:
+				return null
+			
+			check_token = tk_type.EQUAL if expr.style == style.PYTHON_DICT else tk_type.COLON
+			
+			if expr.style == style.LUA_TABLE:
+				if key.type != preparser_lang.Type.IDENTIFIER and key.type != preparser_lang.Type.LITERAL:
+					make_error('Expected identifier or string as Lua-style dictionary key, found %s' % preparser_lang.Type.keys()[key.type])
+					return null
+				key.reduced_value = key.name \
+				if key.type == preparser_lang.Type.IDENTIFIER else \
+				str(key.variant)
+				print(key.reduced_value)
+				#this all helps with grabbing proper key names inside of lua tables :p
+				#however python styling doesnt follow these rules
+			
+			consume(check_token,'expected "%s" after dictionary key, mixing types is not allowed' %tk_type.keys()[check_token])
+			
+			var value = parse_expression()
+			
+			if has_errors:
+				return null
+			
+			expr.elements[key] = value
+			if !check(tk_type.COMMA):
+				break
+			advance()
+		skip_newlines()
+		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
+		return expr
 	
 	make_error('pre-processor error, expected expression :/')
 	return null

@@ -3,6 +3,7 @@ class_name AST
 #jumpy jane save me
 
 class Expr:
+	var reduced_value = null
 	var tk_st = "NONE" #for in editor debugging purposes
 	#disable later
 	
@@ -14,7 +15,7 @@ class Expr:
 
 class VarDeclStatement extends Expr:
 	var name = ""
-	var type_hint:tokens.token
+	var type_hint:Variant #tokens.token or variant type
 	var initializer = null #non constant values can be initialized as null
 	var is_constant := false
 	
@@ -28,7 +29,7 @@ class variableExpr extends Expr:
 	
 	func _init(p_name:String) -> void:
 		name = p_name
-
+		type = preparser_lang.Type.IDENTIFIER
 
 #passing in the value 'true' should infer the type of 'bool',
 #i.e passing in the string "true" should infer 'string' 
@@ -75,6 +76,7 @@ class funcDeclStatement extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.FUNCTION
 
+
 class array extends Expr:
 	var elements:Array[Expr] = []
 	
@@ -82,8 +84,26 @@ class array extends Expr:
 		type = preparser_lang.Type.ARRAY
 
 class dictionary extends Expr:
+	enum styling {
+		NONE,
+		PYTHON_DICT,
+		LUA_TABLE
+	}
+	
+	var style:styling = styling.NONE
 	var elements:Dictionary = {}
 	
+	#supply with check(TOKEN_TYPE) from the preprocessor
+	func decide_style(EQUAL:bool,COLON:bool):
+		if style != styling.NONE:
+			return 
+		if EQUAL:
+			style = styling.PYTHON_DICT
+		elif COLON:
+			style = styling.LUA_TABLE
+
+
+
 	func _init() -> void:
 		type = preparser_lang.Type.DICTIONARY
 
