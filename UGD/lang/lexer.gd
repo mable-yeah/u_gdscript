@@ -23,7 +23,7 @@ var pending_EOF := false
 
 
 
-var pending_indents = 0
+var pending_indents := 0
 
 var column := 0
 var cursor := 0
@@ -73,25 +73,19 @@ func debug_token_print(debug_print := true) -> String:
 	return '\n'.join(tk_name)
 	
 
-#handles beggining of file stuff
-#func handle_BOF():
-	#read_char()
-	#check_indent()
-	#if indent_level() == 0:
-		#column -= 1
-		#cursor -= 1
-		#ch = peek_char()
-
 ##advances through the length of the code string, assigning all valid characters into tokens
 func tokenize() -> Array:
 	var newtoken:tokens.token = tokens.create_token()
+	
 	while cursor <= length:
+		eat_whitespace()
 		newtoken = next_token()
 		tk_arr.push_back(newtoken)
 		last_token = newtoken
 		
 		if newtoken.type == tk_type.TK_EOF || contains_error:
 			break
+		
 	return tk_arr
 
 
@@ -99,7 +93,6 @@ func tokenize() -> Array:
 ##gets the current token type and advances characters, returning a new token
 func next_token() -> tokens.token:
 	var newtoken := tokens.create_token()
-	eat_whitespace()
 	
 	if pending_newline:
 		pending_newline = false
@@ -605,17 +598,17 @@ func eat_whitespace():
 				read_char()
 				continue
 			'\t':
+				
 				read_char()
 				column += tab_size - 1
 				continue
 			'\n':
-				read_char()
+				
 				#skip newline token generation, if EOF is pending, as that last newline is just an extra newline
 				#to satisfy indent/dedent generation
-				
-				
 				newline(false if pending_EOF else !beggining_of_line)
 				check_indent()
+				read_char()
 				continue
 			'\r':
 				read_char()
@@ -724,14 +717,15 @@ func newline(make_token:bool = false):
 		pending_newline = true
 		last_newline = token
 		last_token = token
-		tk_arr.append(token)
-	column = 1 #reset column
-	#print('reset column')
+		tk_arr.push_back(token)
+	column = 1
 
 func check_indent():
+	
 	if column != 1:
 		printerr('checking tokenizer indentation in the middle of a line')
 		return
+	#eat_whitespace()
 	
 	if is_at_end():
 		if line_continuous || multiline_mode:
@@ -741,12 +735,14 @@ func check_indent():
 		return
 	
 	
+	
 	while true:
-		#this works but peek_char needs to be -1, when the code in godot source just uses 0/the current character???
-		current_indent_char = peek_char(-1)
-		#not arguing though
+		current_indent_char = peek_char()
 		var indent_count = 0
 		if current_indent_char != '\t' and current_indent_char != ' ':
+			if is_whitespace(current_indent_char):
+				read_char()
+				continue
 			#First character of the line is not any tab characters, so we clear all indentation levels.
 			#unless continuous or multiline of course
 			if line_continuous || multiline_mode:
@@ -755,20 +751,11 @@ func check_indent():
 			indent_stack.clear()
 			return
 		
-		#if peek_char() == '\r':
-			#read_char()
-			#if peek_char() != '\n':
-				#printerr('stray carriage in code')
-				#return
-
-		#if peek_char() == '\n':
-			#read_char()
-			#newline(false)
-			#continue
-
+		
+		
 		var mixed = false
 		while not is_at_end():
-			var space =  peek_char(-1)
+			var space =  peek_char()
 			if space == '\t':
 				column += tab_size - 1
 				indent_count += tab_size
@@ -778,21 +765,12 @@ func check_indent():
 				break
 			mixed = mixed || space != current_indent_char
 			read_char()
+		
 		if is_at_end():
 			pending_indents -= indent_level()
 			indent_stack.clear()
 			return
-		
-		#if peek_char() == '\r':
-			#read_char()
-			#if peek_char() != '\n':
-				#printerr('stray carriage in code')
-				#return
-		#if peek_char() == '\n':
-			#read_char()
-			#newline(false)
-			#continue
-		#
+	
 		if mixed and line_continuous and !multiline_mode:
 			tk_arr.append(make_error_tk('Mixed use of tabs and spaces for indentation.'))
 			return
@@ -814,11 +792,11 @@ func check_indent():
 			tk_arr.append(make_error_tk('Mixed use of indentation characters, expected %s but got %s' % [indent_char.c_escape(),current_indent_char.c_escape()]))
 		
 		var previous_indent := 0
-		
 		if indent_level() > 0:
 			previous_indent = indent_stack.back()
 		if indent_count == previous_indent:
 			return #no changes
+		
 		
 		if indent_count > previous_indent:
 			indent_stack.push_back(indent_count)
@@ -827,15 +805,18 @@ func check_indent():
 			if indent_level() == 0:
 				tk_arr.append(make_error_tk('Tokenizer bug: trying to dedent without previous indent.'))
 				return
+			
 			if indent_count > previous_indent:
 				indent_stack.push_back(indent_count)
+				pending_indents += 1
+			
 			while indent_level() > 0 and indent_stack.back() > indent_count:
 				indent_stack.pop_back()
 				pending_indents -= 1
-			if indent_level() > 0 and indent_stack.back() > indent_count || indent_level() == 0 and indent_count != 0:
+			if indent_level() > 0 and indent_stack.back() != indent_count || indent_level() == 0 and indent_count != 0:
 				tk_arr.append(make_error_tk("Unindent doesn't match the previous indentation level."))
 				indent_stack.push_back(indent_count)
-		#all of this could've been an email
+		
 		break
 	
 
