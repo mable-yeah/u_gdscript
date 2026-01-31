@@ -354,11 +354,10 @@ func handle_newline():
 	if p != '\n':
 		return make_error('expected newline after \\')
 	read_char()
-	newline(false)
+	eat_whitespace(false)
 	line_continuous = true
-	eat_whitespace()
 	continuation_lines.push_back(cursor)
-	return next_token()
+	return get_token_type()
 
 
 
@@ -585,7 +584,7 @@ func annotation():
 func is_whitespace(st:String):  
 	return st == " " || st == "\t" || st == "\n" || st == "\r"
 
-func eat_whitespace():
+func eat_whitespace(generate_newline := true):
 	if pending_indents != 0:
 		return
 	
@@ -610,7 +609,7 @@ func eat_whitespace():
 				
 				#skip newline token generation, if EOF is pending, as that last newline is just an extra newline
 				#to satisfy indent/dedent generation
-				newline(false if pending_EOF else !beggining_of_line)
+				newline(false if pending_EOF || !generate_newline else !beggining_of_line)
 				check_indent()
 				read_char()
 				continue
