@@ -1,7 +1,6 @@
 class_name preprocessor
 
 
-
 var tk_arr:Array[tokens.token] = []
 var length:int:
 	get():
@@ -39,6 +38,10 @@ func _init(p_tk:Array[tokens.token]) -> void:
 #the parser reads top to bottom, so ordering is slightly important!!
 func evaluate_program():
 	while !is_at_end(): 
+		if check(tk_type.INDENT):
+			printerr('indent in class body')
+			advance()
+		
 		if check(tk_type.CLASS_NAME): # // HEADER BEGIN
 			advance()
 			var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
@@ -81,9 +84,9 @@ func evaluate_program():
 			var valid = program.declare_func(_declaration.name,_declaration)
 			if not valid:
 				make_error('function "%s" is already a declared variable in this context' % _declaration.name)
-			
-		if check(tk_type.INDENT):
-			make_error('indent in class body')
+			#
+
+		
 		elif check(tk_type.NEWLINE):
 			skip_newlines()
 		else:
@@ -141,7 +144,7 @@ func parse_func_declaration():
 	skip_newlines()
 	consume(tk_type.INDENT,'expected indent after function declaration')
 
-	statement.body = parse_func_scope()
+	statement.body = parse_scope_block()
 	statement.type_hint = _type
 	statement.params = params
 	statement.name = _name.literal
@@ -149,15 +152,16 @@ func parse_func_declaration():
 	return statement
 
 
-func parse_func_scope() -> Array:
+func parse_scope_block() -> Array[AST.Expr]:
 	if has_errors:
 		return []
-	var lines = []
+	var lines:Array[AST.Expr] = []
 	while (!check(tk_type.DEDENT) and !is_at_end()):
 		skip_newlines()
 		if (!check(tk_type.DEDENT) and !is_at_end()):
 			lines.push_back(parse_current_scope())
-	consume(tk_type.DEDENT,'expected dedent after function body')
+	
+	consume(tk_type.DEDENT,'expected dedent after scope body')
 	return lines
 
 func parse_current_scope():
@@ -172,13 +176,13 @@ func parse_current_scope():
 		return parse_if()
 	
 	if check(tk_type.WHILE):
-		pass
+		return parse_while()
 	
 	if check(tk_type.FOR):
-		pass
+		return parse_for()
 	
 	if check(tk_type.RETURN):
-		pass
+		return parse_return()
 	
 	if check(tk_type.BREAK):
 		advance()
@@ -197,7 +201,46 @@ func parse_current_scope():
 	return null
 
 
+func parse_return():
+	advance()
+	var return_value = null
+	if !check(tk_type.NEWLINE):
+		return_value = parse_expression()
+	#return is the only one that doesnt consume a dedent after parsing
+	#its not expected to dedent immediatley after making a function return
+	return AST.return_Statement.new(return_value)
 
+func parse_for():
+	advance()
+	
+	var name = consume(tk_type.LITERAL,'expected loop iterator name after "for"')
+	consume(tk_type.TK_IN,'expected "in" after iterator name')
+	var iter = parse_expression()
+	
+	consume(tk_type.COLON,'expected ":" after for statement')
+	skip_newlines()
+	consume(tk_type.INDENT,'expected "indent" after for statement')
+	
+	if has_errors:
+		return null
+	
+	var body = parse_scope_block()
+	return AST.for_Statement.new(name,body,iter)
+
+
+
+func parse_while():
+	advance()
+	var expression = parse_expression()
+	consume(tk_type.COLON,'expected ":" after while statement')
+	skip_newlines()
+	consume(tk_type.INDENT,'expected "indent" after if statement')
+	
+	if has_errors:
+		return null
+	
+	var body = parse_scope_block()
+	return AST.while_Statement.new(expression,body)
 
 func parse_if():
 	advance()
@@ -209,7 +252,7 @@ func parse_if():
 	if has_errors:
 		return null
 	
-	var then_expr:Array[AST.Expr] = [parse_current_scope()]
+	var then_expr:Array[AST.Expr] = parse_scope_block()
 	var else_expr:Array[AST.Expr] = []
 	
 	skip_newlines()
@@ -219,7 +262,7 @@ func parse_if():
 		consume(tk_type.COLON,'expected ":" after else')
 		skip_newlines()
 		consume(tk_type.INDENT,'expected "indent" after if statement')
-		else_expr.append(parse_current_scope())
+		else_expr = parse_scope_block()
 	if has_errors:
 		return null
 	return AST.if_Statement.new(expression,then_expr,else_expr)
@@ -445,11 +488,6 @@ func parse_call():
 		else:
 			break
 	return expr
-
-	
-
-
-
 
 func parse_primary():
 	#BUILT IN VALUES/ DIGITS, STRINGS

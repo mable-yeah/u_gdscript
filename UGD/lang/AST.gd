@@ -102,12 +102,38 @@ class array extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.ARRAY
 
+class return_Statement extends Expr:
+	
+	var expression:Expr = null
+	func _init(p_expr:Expr = null) -> void:
+		type = preparser_lang.Type.RETURN
+		expression = p_expr
+	
+
+class for_Statement extends Expr:
+	var name:String #name of iterator variable 'x'
+	var iter:Expr #expression to iterate on.. like an array or something
+	
+	var body:Expr
+	
+	func _init(p_name:String,p_body:Expr,p_iter:Expr) -> void:
+		type = preparser_lang.Type.FOR
+		name = p_name
+		body = p_body
+		iter = p_iter
+
+class while_Statement extends Expr:
+	var condition:Expr
+	var body:Expr
+	
+	func _init(p_condition:Expr,p_body:Expr) -> void:
+		type = preparser_lang.Type.WHILE
+		condition = p_condition
+		body = p_body
 
 class if_Statement extends Expr:
 	var condition:Expr
-	
 	var _then:Array[Expr] = []
-	
 	var _else:Array[Expr] = []
 	
 	func _init(p_condition:Expr,p_then:Array[Expr],p_else:Array[Expr]) -> void:

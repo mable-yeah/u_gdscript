@@ -169,7 +169,11 @@ func get_token_type() -> Variant: #tk_type OR a token
 		':':
 			type = tk_type.COLON
 		';':
-			type = tk_type.SEMICOLON
+			return tk_type.NEWLINE 
+			#shhh, this a hacky way to get multiple statements in one line
+			#var x = 2+2 ; var y = 5+5
+			#allowing for shit like this which is valid in regular godot script
+			#this should be fine in most cases
 		'$':
 			type = tk_type.DOLLAR
 		'?':
