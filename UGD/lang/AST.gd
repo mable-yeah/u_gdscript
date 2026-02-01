@@ -50,7 +50,7 @@ class MemberCall extends Expr: #.function(expression)
 	var args:Array[Expr]
 	
 	func _init(p_target:Expr,arguments:Array[Expr] = []) -> void:
-		preparser_lang.Type.CALL
+		type = preparser_lang.Type.CALL
 		target = p_target
 		args = arguments
 
@@ -60,7 +60,7 @@ class Call extends Expr: #(expression)
 	var args:Array[Expr]
 	
 	func _init(p_target:String,arguments:Array[Expr] = []) -> void:
-		preparser_lang.Type.CALL
+		type = preparser_lang.Type.CALL
 		target = p_target
 		args = arguments
 
@@ -142,6 +142,16 @@ class array extends Expr:
 	
 	func _init() -> void:
 		type = preparser_lang.Type.ARRAY
+
+class assign_Statement extends Expr:
+	var left:Variant #String (representing a variable) or Expr
+	var right:Expr
+	
+	func _init(p_left:Variant,p_right:Expr) -> void:
+		type = preparser_lang.Type.ASSIGNMENT
+		right = p_right
+		left = p_left
+
 
 
 class expression_Statement extends Expr:

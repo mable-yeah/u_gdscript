@@ -203,15 +203,19 @@ func parse_current_scope():
 func parse_assignment():
 	var _p_cursor = cursor
 	var _left = parse_call()
-	
+	var name = _left.get('name')
 	if check(tk_type.EQUAL): #property = value
 		advance()
 		var _right = parse_expression()
 		consume(tk_type.NEWLINE,'expected newline after assignment')
-		return null
+		if name != null:
+			return AST.assign_Statement.new(name,_right)
+		else:
+			return AST.assign_Statement.new(_left,_right)
 	
 	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
-	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
+	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL) and name != null: #property 'operation_equals' value
+		var ref = AST.variableExpr.new(name)
 		var op_tk = advance()
 		var _right = parse_expression()
 		consume(tk_type.NEWLINE,'expected newline after op assignment')
@@ -222,9 +226,9 @@ func parse_assignment():
 		elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
 			op = preparser_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else preparser_lang.Operation.OP_DIVISION
 		
-		var _expr = AST.binary_Statement.new(_left,op,_right)
+		var _expr = AST.binary_Statement.new(ref,op,_right)
 		
-		
+		return AST.assign_Statement.new(name,_expr)
 	
 	
 	
