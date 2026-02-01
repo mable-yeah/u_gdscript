@@ -21,7 +21,8 @@ class VarDeclStatement extends Expr:
 	
 	func _init() -> void:
 		type = preparser_lang.Type.VARIABLE
-	
+
+
 
 #variable name reference 'x'
 class variableExpr extends Expr:
@@ -43,6 +44,36 @@ class literalExpr extends Expr:
 		literal_type = typeof(p_variant) as Variant.Type
 		type = preparser_lang.Type.LITERAL
 #-
+
+class MemberCall extends Expr: #.function(expression)
+	var target:Expr
+	var args:Array[Expr]
+	
+	func _init(p_target:Expr,arguments:Array[Expr] = []) -> void:
+		preparser_lang.Type.CALL
+		target = p_target
+		args = arguments
+
+
+class Call extends Expr: #(expression)
+	var target:String
+	var args:Array[Expr]
+	
+	func _init(p_target:String,arguments:Array[Expr] = []) -> void:
+		preparser_lang.Type.CALL
+		target = p_target
+		args = arguments
+
+
+
+class Index extends Expr: #arr[expression]
+	var target:Expr
+	var index:Expr
+	
+	func _init(p_target:Expr,p_ind:Expr) -> void:
+		type = preparser_lang.Type.CALL
+		target = p_target 
+		index = p_ind
 
 
 class Assignment extends Expr:
@@ -94,13 +125,32 @@ class break_Statement extends Expr:
 
 
 
-
+class binary_Statement extends Expr:
+	var left:Expr
+	var op:preparser_lang.Operation
+	var right:Expr
+	
+	
+	func _init(p_left:Expr,p_op:preparser_lang.Operation,p_right:Expr) -> void:
+		type = preparser_lang.Type.BINARY_OPERATOR
+		left = p_left
+		op = p_op
+		right = p_right
 
 class array extends Expr:
 	var elements:Array[Expr] = []
 	
 	func _init() -> void:
 		type = preparser_lang.Type.ARRAY
+
+
+class expression_Statement extends Expr:
+	var expression:Expr
+	
+	func _init(p_expr:Expr) -> void:
+		type = preparser_lang.Type.LITERAL
+		expression = p_expr
+
 
 class return_Statement extends Expr:
 	

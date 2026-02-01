@@ -160,6 +160,8 @@ func parse_scope_block() -> Array[AST.Expr]:
 		skip_newlines()
 		if (!check(tk_type.DEDENT) and !is_at_end()):
 			lines.push_back(parse_current_scope())
+			if has_errors:
+				return []
 	
 	consume(tk_type.DEDENT,'expected dedent after scope body')
 	return lines
@@ -195,11 +197,40 @@ func parse_current_scope():
 	if check(tk_type.CONTINUE):
 		advance()
 		return AST.cont_Statement.new()
+	
+	return parse_assignment()
 
-	make_error('unexpected token type "%s" in function body' % peek().get_name())
-	advance()
-	return null
+func parse_assignment():
+	var _p_cursor = cursor
+	var _left = parse_call()
+	
+	if check(tk_type.EQUAL): #property = value
+		advance()
+		var _right = parse_expression()
+		consume(tk_type.NEWLINE,'expected newline after assignment')
+		return null
+	
+	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
+	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
+		var op_tk = advance()
+		var _right = parse_expression()
+		consume(tk_type.NEWLINE,'expected newline after op assignment')
 
+		var op:preparser_lang.Operation
+		if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
+			op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else preparser_lang.Operation.OP_SUBTRACTION
+		elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
+			op = preparser_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else preparser_lang.Operation.OP_DIVISION
+		
+		var _expr = AST.binary_Statement.new(_left,op,_right)
+		
+		
+	
+	
+	
+	consume(tk_type.NEWLINE,'expected newline after expression')
+	return AST.expression_Statement.new(_left)
+	
 
 func parse_return():
 	advance()
@@ -393,12 +424,12 @@ func parse_and_expression(can_assign):
 func parse_equality(can_assign):
 	var left = parse_comparison()
 	if can_assign:
-		while check(tk_type.EQUAL) || check(tk_type.BANG_EQUAL):
+		while check(tk_type.EQUAL_EQUAL) || check(tk_type.BANG_EQUAL):
 			var op_t = advance()
 			var right = parse_comparison()
 			
 			var op = preparser_lang.Operation.OP_COMP_EQUAL \
-			if check(tk_type.EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
+			if check(tk_type.EQUAL_EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
 			
 			left = AST.Assignment.new(left,op,right)
 	
@@ -457,7 +488,6 @@ func parse_factor():
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
 				op = preparser_lang.Operation.OP_MODULO
-		
 		left = AST.Assignment.new(left,op,right)
 	return left
 
@@ -467,14 +497,13 @@ func parse_unary():
 		var operand = parse_unary()
 		var op = AST.Unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.Unary.Operation.OP_NOT 
 		return AST.Unary.new(operand,op)
-		
 	return parse_call()
 
 
 func parse_call():
 	var expr = parse_primary()
 	while true:
-		if check(tk_type.PARENTHESIS_OPEN):
+		if check(tk_type.PARENTHESIS_OPEN): #(arg1,arg2)
 			advance()
 			var arg:Array[AST.Expr] = []
 			if !check(tk_type.PARENTHESIS_CLOSE):
@@ -484,9 +513,34 @@ func parse_call():
 						break
 					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
-			#bruh we aint ever gon get this done girl :crying_emoji:
+			var func_name = expr.get('name')
+			if func_name != null:
+				return AST.Call.new(func_name,arg)
+			make_error('invalid call to type of "%s"' % preparser_lang.Type.keys()[expr.type])
+		
+		elif check(tk_type.BRACKET_OPEN): #arr[0]
+			advance()
+			var ind = parse_expression()
+			consume(tk_type.BRACKET_CLOSE,'expected closing bracket')
+			return AST.Index.new(expr,ind)
+		
+		elif check(tk_type.PERIOD): #.property
+			advance()
+			consume(tk_type.IDENTIFIER,'expected identifier after "."')
+			var arg:Array[AST.Expr] = []
+			if check(tk_type.PARENTHESIS_OPEN): #+ parameters
+				advance()
+				if !check(tk_type.PARENTHESIS_CLOSE):
+					while true:
+						arg.push_back(parse_expression())
+						if !check(tk_type.COMMA):
+							break
+						advance()
+				consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after "." property arguments')
+			return AST.MemberCall.new(expr,arg)
 		else:
 			break
+	
 	return expr
 
 func parse_primary():
@@ -586,5 +640,5 @@ func parse_primary():
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
 		return expr
 	
-	make_error('pre-processor error, expected expression :/, %s' % peek().get_name())
+	make_error('pre-processor error, expected expression :/, got %s instead' % peek().get_name())
 	return null

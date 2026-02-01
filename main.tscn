@@ -5,12 +5,19 @@ script/source = "extends Control
 
 var loader:script_loader = null
 func _ready() -> void:
-	$parse.pressed.connect(func():
-		loader = script_loader.new()
-		loader.load_string($HSplitContainer/CodeEdit.text)
-		$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.lex.debug_token_print(false)
-		#$CodeEdit.text = $CodeEdit.text.c_escape()
-	)
+	$parse.pressed.connect(_parse)
+
+
+func _parse():
+	loader = script_loader.new()
+	loader.load_string($HSplitContainer/CodeEdit.text)
+	$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.lex.debug_token_print(false)
+
+
+
+func _unhandled_input(_event: InputEvent) -> void:
+	if Input.is_action_just_pressed(\"ui_accept\"):
+		_parse()
 
 var mem = '%s / %s'
 @warning_ignore(\"unused_parameter\")
