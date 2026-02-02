@@ -92,10 +92,14 @@ func evaluate_program() -> void:
 	#how to teleport tutorial working 2026
 
 
-func skip_newlines():
-	while check(tk_type.NEWLINE):
-		consume(tk_type.NEWLINE,'expected newline')
-
+func skip_newlines(ignore_indents := false):
+	if !ignore_indents:
+		while check(tk_type.NEWLINE):
+			advance()
+	else: 
+		while check(tk_type.NEWLINE) || check(tk_type.INDENT) || check(tk_type.DEDENT):
+			advance()
+	
 func parse_func_declaration() -> AST.funcDecl_Statement:
 	advance()
 	var statement = AST.funcDecl_Statement.new()
@@ -195,38 +199,45 @@ func parse_assignment():
 	var _left = parse_call()
 	if has_errors:
 		return null
-	var name = _left.get('name')
+	var name = null
+	
+	if _left is AST.member_Call:
+		name = _left.target.get('name')
+	else:
+		name = _left.get('name')
+	
 	if check(tk_type.EQUAL): #property = value
 		advance()
 		var _right = parse_expression()
 		
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		
-		if name != null:
+		if name != null and name != '':
 			return AST.assign_Statement.new(name,_right)
 		else:
 			return AST.assign_Statement.new(_left,_right)
 	
-	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
-	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL) and name != null: #property 'operation_equals' value
-		var ref = AST.variable.new(name)
-		var op_tk = advance()
-		var _right = parse_expression()
-		consume(tk_type.NEWLINE,'expected newline after op assignment')
+	
+	if name != null and name != '':
+		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
+		|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
+			var ref = AST.variable.new(name)
+			var op_tk = advance()
+			var _right = parse_expression()
+			consume(tk_type.NEWLINE,'expected newline after op assignment')
 
-		var op:preparser_lang.Operation
-		if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
-			op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else preparser_lang.Operation.OP_SUBTRACTION
-		elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
-			op = preparser_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else preparser_lang.Operation.OP_DIVISION
+			var op:preparser_lang.Operation
+			if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
+				op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else preparser_lang.Operation.OP_SUBTRACTION
+			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
+				op = preparser_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else preparser_lang.Operation.OP_DIVISION
+			
+			var _expr = AST.binary_Statement.new(ref,op,_right)
+			
+			return AST.assign_Statement.new(name,_expr)
 		
-		var _expr = AST.binary_Statement.new(ref,op,_right)
-		
-		return AST.assign_Statement.new(name,_expr)
 	
-	
-	
-	consume(tk_type.NEWLINE,'expected newline after expression')
+	consume(tk_type.NEWLINE,'expected newline after expression, got %s')
 	return AST.expression_Statement.new(_left)
 	
 
@@ -244,7 +255,9 @@ func parse_return():
 func parse_for():
 	advance()
 	
-	var name = consume(tk_type.LITERAL,'expected loop iterator name after "for"')
+	var name_tk = consume(tk_type.IDENTIFIER,'expected loop iterator name after "for", got %s')
+	
+	
 	consume(tk_type.TK_IN,'expected "in" after iterator name')
 	var iter = parse_expression()
 	
@@ -256,7 +269,7 @@ func parse_for():
 		return null
 	
 	var body = parse_scope_block()
-	return AST.for_Statement.new(name,body,iter)
+	return AST.for_Statement.new(name_tk.literal,body,iter)
 
 
 
@@ -415,9 +428,13 @@ func parse_ternary_expression(can_assign) -> AST.Expr:
 	var left = parse_or_expression(can_assign)
 	if check(tk_type.IF):
 		advance()
-		var expr = parse_expression(can_assign) 
+		var expr = parse_expression(true)
+		
 		#not too sure if doing this is good or not but it hasn't generated any errors yet
 		consume(tk_type.ELSE, 'expected "else" in ternary expression, got %s')
+		if has_errors:
+			return null
+		
 		var right = parse_ternary_expression(can_assign)
 		return AST.ternary.new(left, expr, right)
 	return left
@@ -426,7 +443,7 @@ func parse_ternary_expression(can_assign) -> AST.Expr:
 
 func parse_or_expression(can_assign) -> AST.Expr:
 	var left = parse_and_expression(can_assign)
-	while check(tk_type.OR):
+	while check(tk_type.OR) || check(tk_type.PIPE_PIPE):
 		advance()
 		var right = parse_and_expression(can_assign)
 		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
@@ -528,8 +545,10 @@ func parse_call() -> AST.Expr:
 			var arg:Array[AST.Expr] = []
 			if !check(tk_type.PARENTHESIS_CLOSE):
 				while true:
+					skip_newlines(true)
 					arg.push_back(parse_expression())
 					if !check(tk_type.COMMA):
+						skip_newlines(true)
 						break
 					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments, got %s instead')
@@ -546,8 +565,16 @@ func parse_call() -> AST.Expr:
 		
 		elif check(tk_type.PERIOD): #.property
 			advance()
-			consume(tk_type.IDENTIFIER,'expected identifier after "."')
 			var arg:Array[AST.Expr] = []
+			
+			if check(tk_type.IDENTIFIER): #add property to array
+				arg.push_back(parse_expression(false))
+			
+			if check(tk_type.PERIOD): #if property is '.property.value()' continue chain
+				advance()
+				arg.push_back(parse_expression())
+				
+			
 			if check(tk_type.PARENTHESIS_OPEN): #+ parameters
 				advance()
 				if !check(tk_type.PARENTHESIS_CLOSE):
@@ -557,6 +584,8 @@ func parse_call() -> AST.Expr:
 							break
 						advance()
 				consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after "." property arguments')
+
+			
 			return AST.member_Call.new(expr,arg)
 		else:
 			break
@@ -645,7 +674,7 @@ func parse_primary() -> AST.Expr:
 				key.reduced_value = key.name \
 				if key.type == preparser_lang.Type.IDENTIFIER else \
 				str(key.variant)
-				print(key.reduced_value)
+				#print(key.reduced_value)
 				#this all helps with grabbing proper key names inside of lua tables :p
 				#however python styling doesnt follow these rules
 			
@@ -660,7 +689,7 @@ func parse_primary() -> AST.Expr:
 			if !check(tk_type.COMMA):
 				break
 			advance()
-		skip_newlines()
+		skip_newlines(true)
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
 		return expr
 	

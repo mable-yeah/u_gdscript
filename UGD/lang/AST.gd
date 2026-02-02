@@ -48,12 +48,12 @@ class member_Call extends Expr: #.function(expression)
 
 
 class _call extends Expr: #(expression)
-	var target:String
+	var name:String
 	var args:Array[Expr]
 	
 	func _init(p_target:String,arguments:Array[Expr] = []) -> void:
 		type = preparser_lang.Type.CALL
-		target = p_target
+		name = p_target
 		args = arguments
 
 
@@ -215,9 +215,9 @@ class for_Statement extends Expr:
 	var name:String #name of iterator variable 'x'
 	var iter:Expr #expression to iterate on.. like an array or something
 	
-	var body:Expr
+	var body:Array[Expr] #body of for statement
 	
-	func _init(p_name:String,p_body:Expr,p_iter:Expr) -> void:
+	func _init(p_name:String,p_body:Array[Expr],p_iter:Expr) -> void:
 		type = preparser_lang.Type.FOR
 		name = p_name
 		body = p_body
@@ -250,6 +250,5 @@ class PROGRAM:
 	var class_n:String 
 	var extends_n:String
 	
-	#these are dictionarys so i can double check for already declared variables/functions
-	var globals:Array
-	var functions:Array
+	var globals:Array[varDecl_Statement]
+	var functions:Array[funcDecl_Statement]
