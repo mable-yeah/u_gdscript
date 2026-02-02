@@ -16,7 +16,7 @@ var annotations = []
 #else just typing in the error is fine lol
 var global_error_types = {
 	0:'disallowed expression in UGD, "%s"',
-	1:'unrecognized token variant in pre-processor, "%s"'
+	1:'unrecognized token variant in pre-processor, "%s"',
 }
 
 
@@ -36,7 +36,7 @@ func _init(p_tk:Array[tokens.token]) -> void:
 	evaluate_program()
 
 #the parser reads top to bottom, so ordering is slightly important!!
-func evaluate_program():
+func evaluate_program() -> void:
 	while !is_at_end(): 
 		if check(tk_type.INDENT):
 			printerr('indent in class body')
@@ -199,7 +199,9 @@ func parse_assignment():
 	if check(tk_type.EQUAL): #property = value
 		advance()
 		var _right = parse_expression()
-		consume(tk_type.NEWLINE,'expected newline after assignment')
+		
+		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
+		
 		if name != null:
 			return AST.assign_Statement.new(name,_right)
 		else:
@@ -227,6 +229,8 @@ func parse_assignment():
 	consume(tk_type.NEWLINE,'expected newline after expression')
 	return AST.expression_Statement.new(_left)
 	
+
+
 
 func parse_return():
 	advance()
@@ -296,6 +300,7 @@ func parse_if():
 
 
 
+
 #starts after 'var' not at 'var', so advance/consume before calling this
 func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.varDecl_Statement:
 	var statement = AST.varDecl_Statement.new()
@@ -307,15 +312,19 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 	
 	if check(tk_type.EQUAL):
 		advance()
+		
 		_initializer = parse_expression()
 		if has_errors:
 			return statement
-	
 	elif is_const:
 		make_error('expected initializer after constant name')
 	
 	if expect_newline:
-		consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
+		if check(tk_type.COLON):
+			#if get set WERE supported parse it here
+			make_error('colon found after variable declaration "%s", get()/set() is unsupported' % _name.literal)
+		else:
+			consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
 	
 	statement.name = _name.literal
 	statement.type_hint = _type
@@ -343,7 +352,7 @@ func parse_var_type_hint() -> tokens.token:
 
 
 ##advances the parser if the type matches, else error
-func consume(type:tk_type,message:String):
+func consume(type:tk_type,message:String) -> tokens.token:
 	var p = peek()
 	if check(type):
 		advance()
@@ -356,7 +365,7 @@ func consume(type:tk_type,message:String):
 	return p
 
 ##matches type, doesnt throw error if false
-func check(type:tk_type,tk := peek()):
+func check(type:tk_type,tk := peek()) -> bool:
 	#printerr(tk.get_name())
 	if is_at_end() || tk == null: return false
 	return tk.type == type
@@ -398,11 +407,25 @@ func is_at_end() -> bool:
 ##expression stuff :p
 
 ##the entering/start function for the entire expression chain
-func parse_expression(can_assign:=true):
-	return parse_or_expression(can_assign)
+func parse_expression(can_assign:=true) -> AST.Expr:
+	return parse_ternary_expression(can_assign)
 
-func parse_or_expression(can_assign):
-	var left =  parse_and_expression(can_assign)
+
+func parse_ternary_expression(can_assign) -> AST.Expr:
+	var left = parse_or_expression(can_assign)
+	if check(tk_type.IF):
+		advance()
+		var expr = parse_expression(can_assign) 
+		#not too sure if doing this is good or not but it hasn't generated any errors yet
+		consume(tk_type.ELSE, 'expected "else" in ternary expression, got %s')
+		var right = parse_ternary_expression(can_assign)
+		return AST.ternary.new(left, expr, right)
+	return left
+
+
+
+func parse_or_expression(can_assign) -> AST.Expr:
+	var left = parse_and_expression(can_assign)
 	while check(tk_type.OR):
 		advance()
 		var right = parse_and_expression(can_assign)
@@ -410,7 +433,7 @@ func parse_or_expression(can_assign):
 
 	return left
 
-func parse_and_expression(can_assign):
+func parse_and_expression(can_assign) -> AST.Expr:
 	var left = parse_equality(can_assign)
 	while check(tk_type.AND):
 		advance()
@@ -418,7 +441,7 @@ func parse_and_expression(can_assign):
 		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
 	return left
 
-func parse_equality(can_assign):
+func parse_equality(can_assign) -> AST.Expr:
 	var left = parse_comparison()
 	if can_assign:
 		while check(tk_type.EQUAL_EQUAL) || check(tk_type.BANG_EQUAL):
@@ -432,7 +455,7 @@ func parse_equality(can_assign):
 	
 	return left
 
-func parse_comparison():
+func parse_comparison() -> AST.Expr:
 	var left = parse_term()
 	
 	while check(tk_type.LESS) || check(tk_type.LESS_EQUAL) || \
@@ -458,7 +481,7 @@ func parse_comparison():
 	
 	return left
 
-func parse_term():
+func parse_term() -> AST.Expr:
 	var left = parse_factor()
 	while check(tk_type.PLUS) || check(tk_type.MINUS):
 		var op_t = advance()
@@ -468,7 +491,7 @@ func parse_term():
 	
 	return left
 
-func parse_factor():
+func parse_factor() -> AST.Expr:
 	var left = parse_unary()
 	while check(tk_type.STAR) || check(tk_type.SLASH) || check(tk_type.PERCENT):
 		var op_t = advance()
@@ -488,7 +511,7 @@ func parse_factor():
 		left = AST.assignment.new(left,op,right)
 	return left
 
-func parse_unary():
+func parse_unary() -> AST.Expr:
 	if check(tk_type.MINUS,peek()) || check(tk_type.NOT,peek()):
 		var op_t = advance()
 		var operand = parse_unary()
@@ -497,7 +520,7 @@ func parse_unary():
 	return parse_call()
 
 
-func parse_call():
+func parse_call() -> AST.Expr:
 	var expr = parse_primary()
 	while true:
 		if check(tk_type.PARENTHESIS_OPEN): #(arg1,arg2)
@@ -509,7 +532,7 @@ func parse_call():
 					if !check(tk_type.COMMA):
 						break
 					advance()
-			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
+			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments, got %s instead')
 			var func_name = expr.get('name')
 			if func_name != null:
 				return AST._call.new(func_name,arg)
@@ -540,7 +563,11 @@ func parse_call():
 	
 	return expr
 
-func parse_primary():
+func parse_primary() -> AST.Expr:
+	if check(tk_type.SELF):
+		advance()
+		return AST.literal.new('self')
+
 	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
 		var lit:AST.literal

@@ -122,6 +122,17 @@ class dictionary extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.DICTIONARY
 
+class ternary extends Expr:
+	var target:Expr #x
+	var left:Expr #if __ else
+	var right:Expr #y
+	#x if bool_here else y
+	
+	func _init(p_target:Expr,p_left:Expr,p_right:Expr) -> void:
+		type = preparser_lang.Type.TERNARY_OPERATOR
+		target = p_target
+		left = p_left
+		right = p_right
 
 
 #STATEMENT EXPR
