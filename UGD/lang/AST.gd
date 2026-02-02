@@ -1,31 +1,23 @@
 class_name AST
 
 #jumpy jane save me
-
+##base expression classs, all expressions extend this
 class Expr:
 	var reduced_value = null
-	var tk_st = "NONE" #for in editor debugging purposes
-	#disable later
+	var _tk_st = "NONE"
 	
 	
 	var type:preparser_lang.Type = preparser_lang.Type.NONE:
 		set(p_type):
 			type = p_type
-			tk_st = preparser_lang.Type.keys()[p_type]
-
-class VarDeclStatement extends Expr:
-	var name = ""
-	var type_hint:Variant #tokens.token or variant type
-	var initializer = null #non constant values can be initialized as null
-	var is_constant := false
+			_tk_st = get_type_name()
 	
-	func _init() -> void:
-		type = preparser_lang.Type.VARIABLE
-
-
+	
+	func get_type_name() -> String:
+		return preparser_lang.Type.keys()[type]
 
 #variable name reference 'x'
-class variableExpr extends Expr:
+class variable extends Expr:
 	var name = ""
 	
 	func _init(p_name:String) -> void:
@@ -34,7 +26,7 @@ class variableExpr extends Expr:
 
 #passing in the value 'true' should infer the type of 'bool',
 #i.e passing in the string "true" should infer 'string' 
-class literalExpr extends Expr:
+class literal extends Expr:
 	var literal_type:Variant.Type = Variant.Type.TYPE_NIL
 	var variant:Variant = null
 	
@@ -43,9 +35,9 @@ class literalExpr extends Expr:
 		variant = p_variant
 		literal_type = typeof(p_variant) as Variant.Type
 		type = preparser_lang.Type.LITERAL
-#-
 
-class MemberCall extends Expr: #.function(expression)
+
+class member_Call extends Expr: #.function(expression)
 	var target:Expr
 	var args:Array[Expr]
 	
@@ -55,7 +47,7 @@ class MemberCall extends Expr: #.function(expression)
 		args = arguments
 
 
-class Call extends Expr: #(expression)
+class _call extends Expr: #(expression)
 	var target:String
 	var args:Array[Expr]
 	
@@ -65,18 +57,17 @@ class Call extends Expr: #(expression)
 		args = arguments
 
 
-
-class Index extends Expr: #arr[expression]
+class index extends Expr: #arr[expression]
 	var target:Expr
-	var index:Expr
+	var idx:Expr
 	
 	func _init(p_target:Expr,p_ind:Expr) -> void:
 		type = preparser_lang.Type.CALL
 		target = p_target 
-		index = p_ind
+		idx = p_ind
 
 
-class Assignment extends Expr:
+class assignment extends Expr:
 	var left:Expr
 	var op:preparser_lang.Operation
 	var right:Expr
@@ -86,9 +77,9 @@ class Assignment extends Expr:
 		left = LEFT
 		op = OP
 		right = RIGHT
-		
 
-class Unary extends Expr:
+
+class unary extends Expr:
 	enum Operation {OP_NEGATIVE,OP_NOT}
 	
 	var op:Operation
@@ -99,43 +90,6 @@ class Unary extends Expr:
 		op = OP
 		operand = p_operand
 
-class funcDeclStatement extends Expr:
-	var name = ""
-	var type_hint:tokens.token # -> (TYPE)
-	var params:Dictionary[String,Expr]
-	var body:Array = []
-	
-	func _init() -> void:
-		type = preparser_lang.Type.FUNCTION
-
-
-
-
-class pass_Statement extends Expr:
-	func _init() -> void:
-		type = preparser_lang.Type.PASS
-
-class cont_Statement extends Expr:
-	func _init() -> void:
-		type = preparser_lang.Type.CONTINUE
-
-class break_Statement extends Expr:
-	func _init() -> void:
-		type = preparser_lang.Type.BREAK
-
-
-
-class binary_Statement extends Expr:
-	var left:Expr
-	var op:preparser_lang.Operation
-	var right:Expr
-	
-	
-	func _init(p_left:Expr,p_op:preparser_lang.Operation,p_right:Expr) -> void:
-		type = preparser_lang.Type.BINARY_OPERATOR
-		left = p_left
-		op = p_op
-		right = p_right
 
 class array extends Expr:
 	var elements:Array[Expr] = []
@@ -143,64 +97,6 @@ class array extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.ARRAY
 
-class assign_Statement extends Expr:
-	var left:Variant #String (representing a variable) or Expr
-	var right:Expr
-	
-	func _init(p_left:Variant,p_right:Expr) -> void:
-		type = preparser_lang.Type.ASSIGNMENT
-		right = p_right
-		left = p_left
-
-
-
-class expression_Statement extends Expr:
-	var expression:Expr
-	
-	func _init(p_expr:Expr) -> void:
-		type = preparser_lang.Type.LITERAL
-		expression = p_expr
-
-
-class return_Statement extends Expr:
-	
-	var expression:Expr = null
-	func _init(p_expr:Expr = null) -> void:
-		type = preparser_lang.Type.RETURN
-		expression = p_expr
-	
-
-class for_Statement extends Expr:
-	var name:String #name of iterator variable 'x'
-	var iter:Expr #expression to iterate on.. like an array or something
-	
-	var body:Expr
-	
-	func _init(p_name:String,p_body:Expr,p_iter:Expr) -> void:
-		type = preparser_lang.Type.FOR
-		name = p_name
-		body = p_body
-		iter = p_iter
-
-class while_Statement extends Expr:
-	var condition:Expr
-	var body:Expr
-	
-	func _init(p_condition:Expr,p_body:Expr) -> void:
-		type = preparser_lang.Type.WHILE
-		condition = p_condition
-		body = p_body
-
-class if_Statement extends Expr:
-	var condition:Expr
-	var _then:Array[Expr] = []
-	var _else:Array[Expr] = []
-	
-	func _init(p_condition:Expr,p_then:Array[Expr],p_else:Array[Expr]) -> void:
-		type = preparser_lang.Type.IF
-		condition = p_condition
-		_then = p_then
-		_else = p_else
 
 class dictionary extends Expr:
 	enum styling {
@@ -226,26 +122,123 @@ class dictionary extends Expr:
 	func _init() -> void:
 		type = preparser_lang.Type.DICTIONARY
 
+
+
+#STATEMENT EXPR
+
+class funcDecl_Statement extends Expr:
+	var name = ""
+	var type_hint:tokens.token # -> (TYPE)
+	var params:Dictionary[String,Expr]
+	var body:Array = []
+	
+	func _init() -> void:
+		type = preparser_lang.Type.FUNCTION
+
+
+class varDecl_Statement extends Expr:
+	var name = ""
+	var type_hint:Variant #tokens.token or variant type
+	var initializer = null #non constant values can be initialized as null
+	var is_constant := false
+	
+	func _init() -> void:
+		type = preparser_lang.Type.VARIABLE
+
+
+class pass_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.PASS
+
+
+class cont_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.CONTINUE
+
+
+class break_Statement extends Expr:
+	func _init() -> void:
+		type = preparser_lang.Type.BREAK
+
+
+class binary_Statement extends Expr:
+	var left:Expr
+	var op:preparser_lang.Operation
+	var right:Expr
+	
+	
+	func _init(p_left:Expr,p_op:preparser_lang.Operation,p_right:Expr) -> void:
+		type = preparser_lang.Type.BINARY_OPERATOR
+		left = p_left
+		op = p_op
+		right = p_right
+
+
+class assign_Statement extends Expr:
+	var left:Variant #String (representing a variable) or Expr
+	var right:Expr
+	
+	func _init(p_left:Variant,p_right:Expr) -> void:
+		type = preparser_lang.Type.ASSIGNMENT
+		right = p_right
+		left = p_left
+
+
+class expression_Statement extends Expr:
+	var expression:Expr
+	
+	func _init(p_expr:Expr) -> void:
+		type = preparser_lang.Type.LITERAL
+		expression = p_expr
+
+
+class return_Statement extends Expr:
+	
+	var expression:Expr = null
+	func _init(p_expr:Expr = null) -> void:
+		type = preparser_lang.Type.RETURN
+		expression = p_expr
+
+
+class for_Statement extends Expr:
+	var name:String #name of iterator variable 'x'
+	var iter:Expr #expression to iterate on.. like an array or something
+	
+	var body:Expr
+	
+	func _init(p_name:String,p_body:Expr,p_iter:Expr) -> void:
+		type = preparser_lang.Type.FOR
+		name = p_name
+		body = p_body
+		iter = p_iter
+
+
+class while_Statement extends Expr:
+	var condition:Expr
+	var body:Expr
+	
+	func _init(p_condition:Expr,p_body:Expr) -> void:
+		type = preparser_lang.Type.WHILE
+		condition = p_condition
+		body = p_body
+
+
+class if_Statement extends Expr:
+	var condition:Expr
+	var _then:Array[Expr] = []
+	var _else:Array[Expr] = []
+	
+	func _init(p_condition:Expr,p_then:Array[Expr],p_else:Array[Expr]) -> void:
+		type = preparser_lang.Type.IF
+		condition = p_condition
+		_then = p_then
+		_else = p_else
+
+
 class PROGRAM: 
 	var class_n:String 
-	#var extends_n:String
+	var extends_n:String
 	
 	#these are dictionarys so i can double check for already declared variables/functions
-	var globals:Dictionary[String,Expr]
-	var functions:Dictionary
-	
-	##defines a variable into the globals array
-	##returns true if valid else false
-	func declare_global_Var(Name:String,VarEXP:Expr):
-		if globals.has(Name):
-			return false
-		globals[Name] = VarEXP
-		return true
-	
-	##defines a function into the functions array
-	##returns true if valid else false
-	func declare_func(Name:String,VarEXP:Expr):
-		if functions.has(Name):
-			return false
-		functions[Name] = VarEXP
-		return true
+	var globals:Array
+	var functions:Array

@@ -335,9 +335,9 @@ func get_token_type() -> Variant: #tk_type OR a token
 				type = tk_type.GREATER
 		_:
 			if is_whitespace(c):
-				printerr("invalid whitespace char %s" % c.c_escape())
+				make_error("invalid whitespace char %s" % c.c_escape())
 			else:
-				printerr("invalid char %s" % c)
+				make_error("invalid char %s" % c)
 	return type
 
 
@@ -453,11 +453,11 @@ func number():
 				if !has_decimal:
 					has_decimal = true
 				else:
-					return make_error('Cannot use a decimal point twice in a number')
+					return make_error('cannot use a decimal point twice in a number')
 			16:
-				return make_error('Cannot use a decimal point twice in a hex number')
+				return make_error('cannot use a decimal point twice in a hex number')
 			_:
-				return make_error('Cannot use a decimal point in binary number')
+				return make_error('cannot use a decimal point in binary number')
 		read_char()
 		if peek_char() == '_': #allow 10.0 not 10._ 
 			return make_error('unexpected underscore after decimal point')
@@ -481,7 +481,7 @@ func number():
 			if peek_char() == '+' || peek_char() == '-':
 				read_char()
 			if not is_digit(peek_char()):
-				return make_error('Expected exponent value after "e".')
+				return make_error('expected exponent value after "e".')
 			was_underscore = false
 	
 	#var binary = 0b012
@@ -496,15 +496,14 @@ func number():
 			read_char()
 
 	if need_digits:
-		printerr(digit_func.keys()[digit_check_func])
-		return make_error('expected digits')
+		return make_error('expected digits, got: %s' % digit_func.keys()[digit_check_func])
 	
 	
 	if has_decimal && peek_char() == '.' and peek_char(1) != '.':
-		return make_error('Cannot use a decimal point twice in a number.')
+		return make_error('cannot use a decimal point twice in a number.')
 	elif is_unicode_identifier_start(peek_char()) || not digit_check(digit_check_func,peek_char()):
 		if is_char(peek_char()):
-			return make_error('Invalid numeric notation. %s...' % span(start,cursor - start))
+			return make_error('invalid numeric notation. %s...' % span(start,cursor - start))
 	
 	#invalidate 0b00012 or 1000.0qqweqw as thats INVALID NOTATION! ! ! !
 	
@@ -560,7 +559,7 @@ func annotation():
 	if is_unicode_identifier_start(peek_char()):
 		read_char()
 	else:
-		return make_error('Expected annotation identifier after @')
+		return make_error('expected annotation identifier after @')
 	
 	var start = cursor - 1
 	while is_unicode_identifier_continue(peek_char()):
@@ -616,7 +615,7 @@ func eat_whitespace(generate_newline := true):
 			'\r':
 				read_char()
 				if peek_char() != '\n': #generate error but, forgive it kind of
-					tk_arr.append(make_error("Stray carriage return character in source code."))
+					tk_arr.append(make_error("stray carriage return character in source code."))
 				continue
 			_:
 				return
@@ -707,9 +706,9 @@ func pop_paren(expected_str:String):
 
 func paren_err(p_paren:String):
 	if paren_stack.is_empty():
-		printerr("Closing '%s' doesn't have an opening counterpart" % p_paren)
+		make_error("closing '%s' doesn't have an opening counterpart" % p_paren)
 	else:
-		printerr("Closing '%s' doesn't match an opening %s" % [p_paren,paren_stack.pop_back()])
+		make_error("closing '%s' doesn't match an opening %s" % [p_paren,paren_stack.pop_back()])
 	return tk_type.ERROR
 
 
@@ -726,7 +725,7 @@ func newline(make_token:bool = false):
 func check_indent():
 	
 	if column != 1:
-		printerr('checking tokenizer indentation in the middle of a line')
+		make_error('checking tokenizer indentation in the middle of a line')
 		return
 	#eat_whitespace()
 	
@@ -817,7 +816,7 @@ func check_indent():
 				indent_stack.pop_back()
 				pending_indents -= 1
 			if indent_level() > 0 and indent_stack.back() != indent_count || indent_level() == 0 and indent_count != 0:
-				tk_arr.append(make_error_tk("Unindent doesn't match the previous indentation level."))
+				tk_arr.append(make_error_tk("unindent doesn't match the previous indentation level."))
 				indent_stack.push_back(indent_count)
 		
 		break
@@ -827,9 +826,10 @@ func indent_level() -> int:
 	return indent_stack.size()
 
 ##prints error message ++ returns error token (type)
-func make_error(err_str:String):
+func make_error(st:String):
 	contains_error = true
-	printerr(err_str)
+	var generic = 'Tokenizer/Lexer error: "%s"'
+	printerr(generic % st)
 	return tk_type.ERROR
 
 ##prints error message ++ returns error token (object)
@@ -838,7 +838,7 @@ func make_error_tk(err_str:String):
 	token.type = tk_type.ERROR
 	token.idx = cursor
 	contains_error = true
-	printerr(err_str)
+	make_error(err_str)
 	return token
 
 ##creates literal token

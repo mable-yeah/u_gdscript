@@ -53,8 +53,13 @@ func evaluate_program():
 			make_error('class name is already defined as "%s" in this context' %[program.class_n])
 		if check(tk_type.EXTENDS):
 			advance()
-			make_error(global_error_types[0] % previous().get_name())
-			skip_newlines() # // HEADER END
+			var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
+			if has_errors:
+				continue
+			if program.extends_n == "":
+				program.extends_n = c_tk.literal
+				continue
+			make_error('class extention is already defined as "%s" in this context' %[program.extends_n])
 		
 		#rest of this is body
 		elif check(tk_type.ANNOTATION):
@@ -65,28 +70,19 @@ func evaluate_program():
 			var _declaration = parse_var_declaration(true)
 			if has_errors:
 				break
-			var valid = program.declare_global_Var(_declaration.name,_declaration)
-			if not valid:
-				make_error('variant "%s" is already a declared constant variable in this context' % _declaration.name)
+			program.globals.push_back(_declaration)
 		elif check(tk_type.VAR):
 			advance()
 			var _declaration = parse_var_declaration()
 			if has_errors:
 				break
-			var valid = program.declare_global_Var(_declaration.name,_declaration)
-			if not valid:
-				make_error('variant "%s" is already a declared variable in this context' % _declaration.name)
+			program.globals.push_back(_declaration)
 			
 		elif check(tk_type.FUNC): 
 			var _declaration = parse_func_declaration()
 			if has_errors:
 				break
-			var valid = program.declare_func(_declaration.name,_declaration)
-			if not valid:
-				make_error('function "%s" is already a declared variable in this context' % _declaration.name)
-			#
-
-		
+			program.functions.push_back(_declaration)
 		elif check(tk_type.NEWLINE):
 			skip_newlines()
 		else:
@@ -96,19 +92,13 @@ func evaluate_program():
 	#how to teleport tutorial working 2026
 
 
-
-
-
-
-
 func skip_newlines():
 	while check(tk_type.NEWLINE):
 		consume(tk_type.NEWLINE,'expected newline')
 
-
-func parse_func_declaration():
+func parse_func_declaration() -> AST.funcDecl_Statement:
 	advance()
-	var statement = AST.funcDeclStatement.new()
+	var statement = AST.funcDecl_Statement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name')
 	var _type = null
 	var params:Dictionary[String,AST.Expr]
@@ -119,7 +109,7 @@ func parse_func_declaration():
 		while true:
 			var expression = parse_var_declaration(false,false)
 			if params.has(expression.name):
-				make_error('Parameter "%s" was already declared for this function' % expression.name)
+				make_error('parameter "%s" was already declared for this function' % expression.name)
 				break
 			if expression == null:
 				make_error('null as expression :/')
@@ -203,6 +193,8 @@ func parse_current_scope():
 func parse_assignment():
 	var _p_cursor = cursor
 	var _left = parse_call()
+	if has_errors:
+		return null
 	var name = _left.get('name')
 	if check(tk_type.EQUAL): #property = value
 		advance()
@@ -215,7 +207,7 @@ func parse_assignment():
 	
 	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
 	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL) and name != null: #property 'operation_equals' value
-		var ref = AST.variableExpr.new(name)
+		var ref = AST.variable.new(name)
 		var op_tk = advance()
 		var _right = parse_expression()
 		consume(tk_type.NEWLINE,'expected newline after op assignment')
@@ -305,8 +297,8 @@ func parse_if():
 
 
 #starts after 'var' not at 'var', so advance/consume before calling this
-func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.VarDeclStatement:
-	var statement = AST.VarDeclStatement.new()
+func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.varDecl_Statement:
+	var statement = AST.varDecl_Statement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
 	var _type = parse_var_type_hint()
 	if has_errors:
@@ -371,7 +363,8 @@ func check(type:tk_type,tk := peek()):
 
 ##generates an error and prints it to console
 func make_error(st:String) -> void:
-	printerr(st)
+	var generic = 'Pre-processor error: "%s"'
+	printerr(generic % st)
 	errors.push_back(st)
 	return 
 
@@ -413,7 +406,7 @@ func parse_or_expression(can_assign):
 	while check(tk_type.OR):
 		advance()
 		var right = parse_and_expression(can_assign)
-		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
+		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
 
 	return left
 
@@ -422,7 +415,7 @@ func parse_and_expression(can_assign):
 	while check(tk_type.AND):
 		advance()
 		var right = parse_equality(can_assign)
-		left = AST.Assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
+		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
 	return left
 
 func parse_equality(can_assign):
@@ -435,7 +428,7 @@ func parse_equality(can_assign):
 			var op = preparser_lang.Operation.OP_COMP_EQUAL \
 			if check(tk_type.EQUAL_EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
 			
-			left = AST.Assignment.new(left,op,right)
+			left = AST.assignment.new(left,op,right)
 	
 	return left
 
@@ -461,7 +454,7 @@ func parse_comparison():
 				op = preparser_lang.Operation.OP_COMP_LESS
 		
 		
-		left = AST.Assignment.new(left,op,right)
+		left = AST.assignment.new(left,op,right)
 	
 	return left
 
@@ -471,7 +464,7 @@ func parse_term():
 		var op_t = advance()
 		var right = parse_factor()
 		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else preparser_lang.Operation.OP_SUBTRACTION
-		left = AST.Assignment.new(left,op,right)
+		left = AST.assignment.new(left,op,right)
 	
 	return left
 
@@ -492,15 +485,15 @@ func parse_factor():
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
 				op = preparser_lang.Operation.OP_MODULO
-		left = AST.Assignment.new(left,op,right)
+		left = AST.assignment.new(left,op,right)
 	return left
 
 func parse_unary():
 	if check(tk_type.MINUS,peek()) || check(tk_type.NOT,peek()):
 		var op_t = advance()
 		var operand = parse_unary()
-		var op = AST.Unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.Unary.Operation.OP_NOT 
-		return AST.Unary.new(operand,op)
+		var op = AST.unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.unary.Operation.OP_NOT 
+		return AST.unary.new(operand,op)
 	return parse_call()
 
 
@@ -519,14 +512,14 @@ func parse_call():
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments')
 			var func_name = expr.get('name')
 			if func_name != null:
-				return AST.Call.new(func_name,arg)
-			make_error('invalid call to type of "%s"' % preparser_lang.Type.keys()[expr.type])
+				return AST._call.new(func_name,arg)
+			make_error('invalid call to type of "%s"' % expr.get_type_name())
 		
 		elif check(tk_type.BRACKET_OPEN): #arr[0]
 			advance()
 			var ind = parse_expression()
 			consume(tk_type.BRACKET_CLOSE,'expected closing bracket')
-			return AST.Index.new(expr,ind)
+			return AST.index.new(expr,ind)
 		
 		elif check(tk_type.PERIOD): #.property
 			advance()
@@ -541,7 +534,7 @@ func parse_call():
 							break
 						advance()
 				consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after "." property arguments')
-			return AST.MemberCall.new(expr,arg)
+			return AST.member_Call.new(expr,arg)
 		else:
 			break
 	
@@ -550,23 +543,23 @@ func parse_call():
 func parse_primary():
 	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
-		var lit:AST.literalExpr
+		var lit:AST.literal
 		match current_token.literal:
 			'true':
-				lit = AST.literalExpr.new(true)
+				lit = AST.literal.new(true)
 			'false':
-				lit = AST.literalExpr.new(false)
+				lit = AST.literal.new(false)
 			'null':
-				lit = AST.literalExpr.new(null)
+				lit = AST.literal.new(null)
 			_:
 				#digits/strings are inferred, the literal is already in the correct typing
-				lit = AST.literalExpr.new(current_token.literal)
+				lit = AST.literal.new(current_token.literal)
 		advance()
 		return lit
 	
 	#VARIABLE/OBJECT NAME
 	if check(tk_type.IDENTIFIER):
-		return AST.variableExpr.new(advance().literal)
+		return AST.variable.new(advance().literal)
 	
 	if check(tk_type.PARENTHESIS_OPEN):
 		advance()
@@ -620,7 +613,7 @@ func parse_primary():
 			
 			if expr.style == style.LUA_TABLE:
 				if key.type != preparser_lang.Type.IDENTIFIER and key.type != preparser_lang.Type.LITERAL:
-					make_error('Expected identifier or string as Lua-style dictionary key, found %s' % preparser_lang.Type.keys()[key.type])
+					make_error('expected identifier or string as Lua-style dictionary key, found %s' % expr.get_type_name())
 					return null
 				key.reduced_value = key.name \
 				if key.type == preparser_lang.Type.IDENTIFIER else \
@@ -644,5 +637,6 @@ func parse_primary():
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
 		return expr
 	
+
 	make_error('pre-processor error, expected expression :/, got %s instead' % peek().get_name())
 	return null
