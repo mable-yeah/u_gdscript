@@ -252,3 +252,10 @@ class PROGRAM:
 	
 	var globals:Array[varDecl_Statement]
 	var functions:Array[funcDecl_Statement]
+	
+	##returns if functions/variables are declared yet / used for header stuff
+	func contains_data():
+		return globals.size() + functions.size() > 0
+	
+	
+	

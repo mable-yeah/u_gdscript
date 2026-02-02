@@ -828,7 +828,7 @@ func indent_level() -> int:
 ##prints error message ++ returns error token (type)
 func make_error(st:String):
 	contains_error = true
-	var generic = 'Tokenizer/Lexer error: "%s"'
+	var generic = 'Tokenizer/Lexer error: \' %s \''
 	printerr(generic % st)
 	return tk_type.ERROR
 

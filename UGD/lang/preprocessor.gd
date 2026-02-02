@@ -16,7 +16,8 @@ var annotations = []
 #else just typing in the error is fine lol
 var global_error_types = {
 	0:'disallowed expression in UGD, "%s"',
-	1:'unrecognized token variant in pre-processor, "%s"',
+	1:'disallowed expression in the current scope %s',
+	
 }
 
 
@@ -42,6 +43,10 @@ func evaluate_program() -> void:
 			printerr('indent in class body')
 			advance()
 		
+		
+		if (check(tk_type.CLASS_NAME) || check(tk_type.EXTENDS)) and program.contains_data():
+			make_error('header %s defined after class functions/variables' % peek().get_name())
+		
 		if check(tk_type.CLASS_NAME): # // HEADER BEGIN
 			advance()
 			var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
@@ -63,9 +68,11 @@ func evaluate_program() -> void:
 		
 		#rest of this is body
 		elif check(tk_type.ANNOTATION):
+			make_error(global_error_types[0] % peek().get_name())
 			advance()
-			make_error(global_error_types[0] % previous().get_name())
-		elif check(tk_type.TK_CONST): 
+		elif check(tk_type.ENUM):
+			var _declaration = parse_enum_declaration()
+		elif check(tk_type.TK_CONST):
 			advance()
 			var _declaration = parse_var_declaration(true)
 			if has_errors:
@@ -86,6 +93,7 @@ func evaluate_program() -> void:
 		elif check(tk_type.NEWLINE):
 			skip_newlines()
 		else:
+			#make_error(global_error_types[0] % peek().get_name())
 			advance()
 		if has_errors:
 			break
@@ -99,7 +107,42 @@ func skip_newlines(ignore_indents := false):
 	else: 
 		while check(tk_type.NEWLINE) || check(tk_type.INDENT) || check(tk_type.DEDENT):
 			advance()
-	
+
+func parse_enum_declaration():
+	advance()
+	var _name = consume(tk_type.IDENTIFIER,'expected enum name, got %s')
+	consume(tk_type.BRACE_OPEN,'expected { after enum name')
+	while true:
+		skip_newlines(true)
+		consume(tk_type.IDENTIFIER,'expected identifier in enum, got %s')
+		if check(tk_type.EQUAL):
+			advance()
+			if check(tk_type.LITERAL): #foo = 2
+				if peek().literal is int: advance()
+				else:
+					make_error('Enum values must be integers, got %s instead' % type_string(typeof(peek().literal)))
+			elif check(tk_type.IDENTIFIER): #foo = bar (bar representing const of 2)
+				advance()
+			else:
+				make_error('expected IDENTIFIER or LITERAL (type int), got %s')
+		
+		if !check(tk_type.COMMA):
+			skip_newlines(true)
+			break
+		advance()
+		skip_newlines(true)
+	consume(tk_type.BRACE_CLOSE,'expected closing } after enum, got %s')
+	return
+
+
+const yep := 2
+enum foo {
+	bar = yep
+}
+
+
+
+
 func parse_func_declaration() -> AST.funcDecl_Statement:
 	advance()
 	var statement = AST.funcDecl_Statement.new()
@@ -385,7 +428,7 @@ func check(type:tk_type,tk := peek()) -> bool:
 
 ##generates an error and prints it to console
 func make_error(st:String) -> void:
-	var generic = 'Pre-processor error: "%s"'
+	var generic = 'Pre-processor error: \' %s \''
 	printerr(generic % st)
 	errors.push_back(st)
 	return 
@@ -632,6 +675,7 @@ func parse_primary() -> AST.Expr:
 			return expr
 		
 		while true:
+			skip_newlines(true)
 			if check(tk_type.BRACKET_CLOSE):
 				break
 			var tk = parse_expression()
@@ -639,9 +683,10 @@ func parse_primary() -> AST.Expr:
 				return null
 			expr.elements.append(tk)
 			if !check(tk_type.COMMA):
+				skip_newlines(true)
 				break
 			advance()
-		consume(tk_type.BRACKET_CLOSE,'expected closing bracket in array')
+		consume(tk_type.BRACKET_CLOSE,'expected closing bracket in array, got %s')
 		return expr
 	
 	#DICTIONARY
@@ -655,7 +700,7 @@ func parse_primary() -> AST.Expr:
 			return expr
 		
 		while true:
-			skip_newlines()
+			skip_newlines(true)
 			
 			var key = parse_expression(false)
 			if has_errors:
@@ -669,7 +714,7 @@ func parse_primary() -> AST.Expr:
 			
 			if expr.style == style.LUA_TABLE:
 				if key.type != preparser_lang.Type.IDENTIFIER and key.type != preparser_lang.Type.LITERAL:
-					make_error('expected identifier or string as Lua-style dictionary key, found %s' % expr.get_type_name())
+					make_error('expected identifier or string as Lua-style dictionary key, got %s' % expr.get_type_name())
 					return null
 				key.reduced_value = key.name \
 				if key.type == preparser_lang.Type.IDENTIFIER else \
@@ -687,12 +732,13 @@ func parse_primary() -> AST.Expr:
 			
 			expr.elements[key] = value
 			if !check(tk_type.COMMA):
+				skip_newlines(true)
 				break
 			advance()
 		skip_newlines(true)
-		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary')
+		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary, got %s')
 		return expr
 	
 
-	make_error('pre-processor error, expected expression :/, got %s instead' % peek().get_name())
+	make_error('pre-processor error, expected expression :/, got %s ' % peek().get_name())
 	return null
