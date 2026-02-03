@@ -57,6 +57,13 @@ class _call extends Expr: #(expression)
 		args = arguments
 
 
+class _enum extends Expr: #enum foo {bar,fungus = 1}
+	var enumerators:Array[Dictionary] = []
+	
+	func _init(p_enum:Array[Dictionary]) -> void:
+		type = preparser_lang.Type.ENUM
+		enumerators = p_enum
+
 class index extends Expr: #arr[expression]
 	var target:Expr
 	var idx:Expr
@@ -148,13 +155,17 @@ class funcDecl_Statement extends Expr:
 
 
 class varDecl_Statement extends Expr:
-	var name = ""
+	var name:String
 	var type_hint:Variant #tokens.token or variant type
-	var initializer = null #non constant values can be initialized as null
-	var is_constant := false
+	var initializer:Variant = null #non constant values can be initialized as null
+	var is_constant:bool = false
 	
-	func _init() -> void:
+	func _init(p_name:String,p_type_hint:Variant,p_initializer:Variant,p_is_constant:bool) -> void:
 		type = preparser_lang.Type.VARIABLE
+		name = p_name
+		type_hint  = p_type_hint
+		initializer = p_initializer
+		is_constant = p_is_constant
 
 
 class pass_Statement extends Expr:

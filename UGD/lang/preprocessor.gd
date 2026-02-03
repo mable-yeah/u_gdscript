@@ -1,6 +1,5 @@
 class_name preprocessor
 
-
 var tk_arr:Array[tokens.token] = []
 var length:int:
 	get():
@@ -72,6 +71,9 @@ func evaluate_program() -> void:
 			advance()
 		elif check(tk_type.ENUM):
 			var _declaration = parse_enum_declaration()
+			if has_errors:
+				break
+			program.globals.push_back(_declaration)
 		elif check(tk_type.TK_CONST):
 			advance()
 			var _declaration = parse_var_declaration(true)
@@ -108,38 +110,39 @@ func skip_newlines(ignore_indents := false):
 		while check(tk_type.NEWLINE) || check(tk_type.INDENT) || check(tk_type.DEDENT):
 			advance()
 
+
 func parse_enum_declaration():
 	advance()
 	var _name = consume(tk_type.IDENTIFIER,'expected enum name, got %s')
+	#technically you can use enums without a name BUT i no no wanna do tha
+	var _enumerators:Array[Dictionary] = []
 	consume(tk_type.BRACE_OPEN,'expected { after enum name')
-	while true:
+	while true and not has_errors:
 		skip_newlines(true)
-		consume(tk_type.IDENTIFIER,'expected identifier in enum, got %s')
+		var enum_name = consume(tk_type.IDENTIFIER,'expected identifier in enum, got %s')
+		
 		if check(tk_type.EQUAL):
 			advance()
-			if check(tk_type.LITERAL): #foo = 2
-				if peek().literal is int: advance()
-				else:
-					make_error('Enum values must be integers, got %s instead' % type_string(typeof(peek().literal)))
-			elif check(tk_type.IDENTIFIER): #foo = bar (bar representing const of 2)
-				advance()
+			if check(tk_type.LITERAL) and peek().literal is int || check(tk_type.IDENTIFIER):  #foo = 2
+				_enumerators.push_back({enum_name.literal:advance().literal})
 			else:
-				make_error('expected IDENTIFIER or LITERAL (type int), got %s')
-		
+				make_error('expected IDENTIFIER or LITERAL (type int), got %s' % peek().get_name())
+		else:
+			_enumerators.push_back({enum_name.literal:_enumerators.size()}) 
+			#just push it back with indexing
 		if !check(tk_type.COMMA):
 			skip_newlines(true)
 			break
 		advance()
 		skip_newlines(true)
+	
 	consume(tk_type.BRACE_CLOSE,'expected closing } after enum, got %s')
-	return
-
-
-const yep := 2
-enum foo {
-	bar = yep
-}
-
+	if has_errors:
+		return null
+	var expr = AST._enum.new(_enumerators)
+	return AST.varDecl_Statement.new(_name.literal,AST.variable.new('int'),expr,true)
+	#for the sake of consistency and cleanness in program.globals, just store enums like a variable
+	#but make it constant
 
 
 
@@ -359,11 +362,10 @@ func parse_if():
 
 #starts after 'var' not at 'var', so advance/consume before calling this
 func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.varDecl_Statement:
-	var statement = AST.varDecl_Statement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
 	var _type = parse_var_type_hint()
 	if has_errors:
-		return statement
+		return null
 	var _initializer = null
 	
 	if check(tk_type.EQUAL):
@@ -371,7 +373,7 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 		
 		_initializer = parse_expression()
 		if has_errors:
-			return statement
+			return null
 	elif is_const:
 		make_error('expected initializer after constant name')
 	
@@ -382,23 +384,16 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 		else:
 			consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
 	
-	statement.name = _name.literal
-	statement.type_hint = _type
-	statement.initializer = _initializer
-	statement.is_constant = is_const
-	
-	return statement
+	return AST.varDecl_Statement.new(_name.literal,_type,_initializer,is_const)
 
-##return identifier token containing the 'type' needed, else null
-func parse_var_type_hint() -> tokens.token:
+##return variable containing the 'type' needed, else null
+func parse_var_type_hint() -> AST.variable:
 	if not check(tk_type.COLON):
 		return
 	advance()
 	#return the token that contains the supposed 'type' we need.. or null
 	if check(tk_type.IDENTIFIER):
-		var t := peek()
-		advance()
-		return t 
+		return AST.variable.new(advance().literal)
 	elif check(tk_type.EQUAL):
 		return null 
 		#return null silently, get it filled by the parsed expression's final type later on
