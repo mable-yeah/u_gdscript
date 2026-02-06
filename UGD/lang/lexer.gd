@@ -1,12 +1,15 @@
 class_name lexer
 
 const tk_type = tokens.type
-var contains_error := false
+var has_errors:bool:
+	get():
+		return !errors.is_empty()
 
 const MIN_KEYWORD = 2 
 const MAX_KEYWORD = 10
 
-var code := "" 
+var code := ""
+
 var length:int:
 	get():
 		return code.length()
@@ -21,8 +24,6 @@ var line_continuous := false
 var pending_EOF := false
 
 
-
-
 var pending_indents := 0
 
 var column := 0
@@ -34,6 +35,7 @@ var indent_char = ''
 
 var current_indent_char := ''
 
+var errors = []
 var continuation_lines = []
 var indent_stack:Array[int] = []
 var paren_stack:Array[String] = []
@@ -83,7 +85,7 @@ func tokenize() -> Array:
 		tk_arr.push_back(newtoken)
 		last_token = newtoken
 		
-		if newtoken.type == tk_type.TK_EOF || contains_error:
+		if newtoken.type == tk_type.TK_EOF:
 			break
 		
 	return tk_arr
@@ -103,18 +105,15 @@ func next_token() -> tokens.token:
 		if pending_indents > 0:
 			pending_indents -= 1
 			newtoken.type = tk_type.INDENT
-			newtoken.idx = cursor
 			return newtoken
 		else:
 			pending_indents += 1
 			newtoken.type = tk_type.DEDENT
-			newtoken.idx = cursor
 			return newtoken
 	
 	if is_at_end():
 		if pending_EOF:
 			newtoken.type = tk_type.TK_EOF
-			newtoken.idx = cursor
 			return newtoken
 		else:
 			pending_EOF = true
@@ -128,7 +127,6 @@ func next_token() -> tokens.token:
 		newtoken = t
 		
 	
-	newtoken.idx = cursor
 	read_char()
 	return newtoken
 
@@ -567,9 +565,7 @@ func annotation():
 	
 	var a_len = cursor - start
 	var annotation_source = span(start,a_len)
-	var annotation_tk = tokens.create_token()
-	annotation_tk.type = tk_type.ANNOTATION 
-	annotation_tk.literal = annotation_source
+	var annotation_tk = tokens.create_token(tk_type.ANNOTATION,annotation_source)
 	return annotation_tk
 
 
@@ -714,8 +710,7 @@ func paren_err(p_paren:String):
 
 func newline(make_token:bool = false):
 	if make_token and !pending_newline and !line_continuous:
-		var token = tokens.create_token()
-		token.type = tk_type.NEWLINE
+		var token = tokens.create_token(tk_type.NEWLINE)
 		pending_newline = true
 		last_newline = token
 		last_token = token
@@ -827,32 +822,23 @@ func indent_level() -> int:
 
 ##prints error message ++ returns error token (type)
 func make_error(st:String):
-	contains_error = true
 	var generic = 'Tokenizer/Lexer error: \' %s \''
 	printerr(generic % st)
+	errors.push_back(st)
 	return tk_type.ERROR
 
 ##prints error message ++ returns error token (object)
 func make_error_tk(err_str:String):
-	var token = tokens.create_token()
-	token.type = tk_type.ERROR
-	token.idx = cursor
-	contains_error = true
+	var token = tokens.create_token(tk_type.ERROR)
 	make_error(err_str)
 	return token
 
 ##creates literal token
 func make_literal(literal_str:Variant):
-	var token = tokens.create_token()
-	token.type = tk_type.LITERAL
-	token.literal = literal_str
-	token.idx = cursor
+	var token = tokens.create_token(tk_type.LITERAL,literal_str)
 	return token
 
 ##creates identifier token
 func make_identifier(literal_str:Variant):
-	var token = tokens.create_token()
-	token.type = tk_type.IDENTIFIER
-	token.literal = literal_str
-	token.idx = cursor
+	var token = tokens.create_token(tk_type.IDENTIFIER,literal_str)
 	return token

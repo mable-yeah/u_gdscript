@@ -164,21 +164,21 @@ const KEYWORDS:Dictionary = {
 }
 
 ##creates a token and returns it
-static func create_token() -> token:
-	var tk = token.new()
+static func create_token(p_type:tokens.type = tokens.type.EMPTY,p_literal:Variant = null) -> token:
+	var tk = token.new(p_type,p_literal)
 	return tk
 
 
 class token:
-	var idx := -1
 	var type:tokens.type = tokens.type.EMPTY
 	var literal:Variant
 	
-	
+	func _init(p_type:tokens.type,p_literal:Variant = null) -> void:
+		type = p_type
+		literal = p_literal
+
 	func get_name() -> String:
 		return tokens.type.keys()[type]
-	
-	
 	
 	func can_precede_bin_op() -> bool:
 		var types = tokens.type
