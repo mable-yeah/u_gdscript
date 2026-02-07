@@ -1,13 +1,14 @@
-class_name preprocessor
+class_name preparser ##uses the lexer's generated TOKENS to create an AST
 
-var tk_arr:Array[tokens.token] = []
+
+var tk_arr:Array[TOKENS.token] = []
 var length:int:
 	get():
 		return tk_arr.size()
 
 
 var cursor := 0
-var current_token:tokens.token = null
+var current_token:TOKENS.token = null
 
 var annotations = []
 
@@ -27,11 +28,11 @@ var has_errors:bool:
 		return !errors.is_empty()
 
 
-const tk_type = tokens.type
+const tk_type = TOKENS.type
 var program := AST.PROGRAM.new()
 
 
-func _init(p_tk:Array[tokens.token]) -> void:
+func _init(p_tk:Array[TOKENS.token]) -> void:
 	tk_arr = p_tk
 	evaluate_program()
 
@@ -95,14 +96,15 @@ func evaluate_program() -> void:
 		elif check(tk_type.NEWLINE):
 			skip_newlines()
 		else:
-			#make_error(global_error_types[0] % peek().get_name())
+			if !OS.has_feature("editor"): #fail if outside of editor
+				make_error(global_error_types[0] % peek().get_name())
 			advance()
 		if has_errors:
 			break
 	#how to teleport tutorial working 2026
 
 
-func skip_newlines(ignore_indents := false):
+func skip_newlines(ignore_indents := false) -> void:
 	if !ignore_indents:
 		while check(tk_type.NEWLINE):
 			advance()
@@ -111,7 +113,7 @@ func skip_newlines(ignore_indents := false):
 			advance()
 
 
-func parse_enum_declaration():
+func parse_enum_declaration() -> AST.varDecl_Statement:
 	advance()
 	var _name = consume(tk_type.IDENTIFIER,'expected enum name, got %s')
 	#technically you can use enums without a name BUT i no no wanna do tha
@@ -206,7 +208,7 @@ func parse_scope_block() -> Array[AST.Expr]:
 	consume(tk_type.DEDENT,'expected dedent after scope body')
 	return lines
 
-func parse_current_scope():
+func parse_current_scope() -> AST.Expr:
 	skip_newlines()
 	
 	if check(tk_type.VAR) || check(tk_type.TK_CONST):
@@ -240,7 +242,7 @@ func parse_current_scope():
 	
 	return parse_assignment()
 
-func parse_assignment():
+func parse_assignment() -> AST.Expr: #expression or assignment
 	var _p_cursor = cursor
 	var _left = parse_call()
 	if has_errors:
@@ -272,11 +274,11 @@ func parse_assignment():
 			var _right = parse_expression()
 			consume(tk_type.NEWLINE,'expected newline after op assignment')
 
-			var op:preparser_lang.Operation
+			var op:loader_lang.Operation
 			if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
-				op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else preparser_lang.Operation.OP_SUBTRACTION
+				op = loader_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else loader_lang.Operation.OP_SUBTRACTION
 			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
-				op = preparser_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else preparser_lang.Operation.OP_DIVISION
+				op = loader_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else loader_lang.Operation.OP_DIVISION
 			
 			var _expr = AST.binary_Statement.new(ref,op,_right)
 			
@@ -289,7 +291,7 @@ func parse_assignment():
 
 
 
-func parse_return():
+func parse_return() -> AST.return_Statement:
 	advance()
 	var return_value = null
 	if !check(tk_type.NEWLINE):
@@ -298,7 +300,7 @@ func parse_return():
 	#its not expected to dedent immediatley after making a function return
 	return AST.return_Statement.new(return_value)
 
-func parse_for():
+func parse_for() -> AST.for_Statement:
 	advance()
 	
 	var name_tk = consume(tk_type.IDENTIFIER,'expected loop iterator name after "for", got %s')
@@ -319,7 +321,7 @@ func parse_for():
 
 
 
-func parse_while():
+func parse_while() -> AST.while_Statement:
 	advance()
 	var expression = parse_expression()
 	consume(tk_type.COLON,'expected ":" after while statement')
@@ -332,7 +334,7 @@ func parse_while():
 	var body = parse_scope_block()
 	return AST.while_Statement.new(expression,body)
 
-func parse_if():
+func parse_if() -> AST.if_Statement:
 	advance()
 	var expression = parse_expression()
 	consume(tk_type.COLON,'expected ":" after if statement')
@@ -403,7 +405,7 @@ func parse_var_type_hint() -> AST.variable:
 
 
 ##advances the parser if the type matches, else error
-func consume(type:tk_type,message:String) -> tokens.token:
+func consume(type:tk_type,message:String) -> TOKENS.token:
 	var p = peek()
 	if check(type):
 		advance()
@@ -429,16 +431,16 @@ func make_error(st:String) -> void:
 	return 
 
 
-func previous() -> tokens.token:
+func previous() -> TOKENS.token:
 	return tk_arr.get(cursor - 1)
 
 
-func peek(peek_dist = 0) -> tokens.token:
+func peek(peek_dist = 0) -> TOKENS.token:
 	if cursor >= length:
 		return null
 	return tk_arr.get(cursor + peek_dist)
 
-func advance() -> tokens.token:
+func advance() -> TOKENS.token:
 	var previous_token = peek() #required for expressions
 	if is_at_end():
 		return
@@ -484,7 +486,7 @@ func parse_or_expression(can_assign) -> AST.Expr:
 	while check(tk_type.OR) || check(tk_type.PIPE_PIPE):
 		advance()
 		var right = parse_and_expression(can_assign)
-		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_OR,right)
+		left = AST.assignment.new(left,loader_lang.Operation.OP_BIT_OR,right)
 
 	return left
 
@@ -493,7 +495,7 @@ func parse_and_expression(can_assign) -> AST.Expr:
 	while check(tk_type.AND):
 		advance()
 		var right = parse_equality(can_assign)
-		left = AST.assignment.new(left,preparser_lang.Operation.OP_BIT_AND,right)
+		left = AST.assignment.new(left,loader_lang.Operation.OP_BIT_AND,right)
 	return left
 
 func parse_equality(can_assign) -> AST.Expr:
@@ -503,8 +505,8 @@ func parse_equality(can_assign) -> AST.Expr:
 			var op_t = advance()
 			var right = parse_comparison()
 			
-			var op = preparser_lang.Operation.OP_COMP_EQUAL \
-			if check(tk_type.EQUAL_EQUAL,op_t) else preparser_lang.Operation.OP_COMP_NOT_EQUAL
+			var op = loader_lang.Operation.OP_COMP_EQUAL \
+			if check(tk_type.EQUAL_EQUAL,op_t) else loader_lang.Operation.OP_COMP_NOT_EQUAL
 			
 			left = AST.assignment.new(left,op,right)
 	
@@ -520,16 +522,16 @@ func parse_comparison() -> AST.Expr:
 		var op
 		match op_t.type:
 			tk_type.LESS_EQUAL:
-				op = preparser_lang.Operation.OP_COMP_LESS_EQUAL
+				op = loader_lang.Operation.OP_COMP_LESS_EQUAL
 			tk_type.LESS:
-				op = preparser_lang.Operation.OP_COMP_LESS
+				op = loader_lang.Operation.OP_COMP_LESS
 			tk_type.GREATER:
-				op = preparser_lang.Operation.OP_COMP_GREATER
+				op = loader_lang.Operation.OP_COMP_GREATER
 			tk_type.GREATER_EQUAL:
-				op = preparser_lang.Operation.OP_COMP_GREATER_EQUAL
+				op = loader_lang.Operation.OP_COMP_GREATER_EQUAL
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
-				op = preparser_lang.Operation.OP_COMP_LESS
+				op = loader_lang.Operation.OP_COMP_LESS
 		
 		
 		left = AST.assignment.new(left,op,right)
@@ -541,7 +543,7 @@ func parse_term() -> AST.Expr:
 	while check(tk_type.PLUS) || check(tk_type.MINUS):
 		var op_t = advance()
 		var right = parse_factor()
-		var op = preparser_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else preparser_lang.Operation.OP_SUBTRACTION
+		var op = loader_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else loader_lang.Operation.OP_SUBTRACTION
 		left = AST.assignment.new(left,op,right)
 	
 	return left
@@ -555,14 +557,14 @@ func parse_factor() -> AST.Expr:
 		
 		match op_t.type:
 			tk_type.STAR:
-				op = preparser_lang.Operation.OP_MULTIPLICATION
+				op = loader_lang.Operation.OP_MULTIPLICATION
 			tk_type.SLASH:
-				op = preparser_lang.Operation.OP_DIVISION
+				op = loader_lang.Operation.OP_DIVISION
 			tk_type.PERCENT:
-				op = preparser_lang.Operation.OP_MODULO
+				op = loader_lang.Operation.OP_MODULO
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
-				op = preparser_lang.Operation.OP_MODULO
+				op = loader_lang.Operation.OP_MODULO
 		left = AST.assignment.new(left,op,right)
 	return left
 
@@ -708,11 +710,11 @@ func parse_primary() -> AST.Expr:
 			check_token = tk_type.EQUAL if expr.style == style.PYTHON_DICT else tk_type.COLON
 			
 			if expr.style == style.LUA_TABLE:
-				if key.type != preparser_lang.Type.IDENTIFIER and key.type != preparser_lang.Type.LITERAL:
+				if key.type != loader_lang.Type.IDENTIFIER and key.type != loader_lang.Type.LITERAL:
 					make_error('expected identifier or string as Lua-style dictionary key, got %s' % expr.get_type_name())
 					return null
 				key.reduced_value = key.name \
-				if key.type == preparser_lang.Type.IDENTIFIER else \
+				if key.type == loader_lang.Type.IDENTIFIER else \
 				str(key.variant)
 				#print(key.reduced_value)
 				#this all helps with grabbing proper key names inside of lua tables :p

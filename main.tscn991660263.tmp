@@ -11,7 +11,7 @@ func _ready() -> void:
 func _parse():
 	loader = script_loader.new()
 	loader.load_string($HSplitContainer/CodeEdit.text)
-	$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.p_lexer.debug_token_print(false)
+	$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.lex.debug_token_print(false)
 
 
 

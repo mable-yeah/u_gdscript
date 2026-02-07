@@ -1,28 +1,40 @@
 class_name script_loader
+
 #TODO
 #-add script loader hints through ::HINT_NAME
-#ideally this would be through the tokenizer/lexer
+#ideally this would be through the tokenizer/lexer i.e before any other operations happen
 #
 #-move cursors/checks/peeks into their own classes that way both preprocessor and lexer can inherit from
 #the same code that is written twice currently 
 #(bonus points if i can make that work through the @abstract class stuff )
 
+#-add error lines in the code i.e 'INVALID_THING <--  at line %s column %s'
+
+
 var DB = ClassDB
 
 var source_code:String
-var lex:lexer
-var p_processor:preprocessor
+
+
+var p_lexer:lexer
+var p_processor:preparser
+var p_analyzer:analyzer
 
 const err_message = {
-	STOPPED_AT = 'UGD scripting stopped at %s'
+	STOPPED_AT = 'UGD scripting stopped at %s .'
 }
 
 func load_string(code):
 	source_code = lang_utilities.scrub_comments_C(code)
-	lex = lexer.new(source_code,false)
-	if lex.has_errors:
-		printerr(err_message.STOPPED_AT % ('Tokenizer/Lexer, error count: %s' % lex.errors.size())) ; return
-	p_processor = preprocessor.new(lex.tk_arr)
+	
+	p_lexer = lexer.new(source_code)
+	if p_lexer.has_errors:
+		printerr(err_message.STOPPED_AT % ('Tokenizer/Lexer, error count: %s' % p_lexer.errors.size())) ; return
+	
+	p_processor = preparser.new(p_lexer.tk_arr)
 	if p_processor.has_errors:
-		printerr(err_message.STOPPED_AT % 'Pre-processor') ; return
-		
+		printerr(err_message.STOPPED_AT % 'Pre-parser') ; return
+	
+	p_analyzer = analyzer.new(p_processor.program)
+	if p_analyzer.has_errors:
+		printerr(err_message.STOPPED_AT % 'Analyzer') ; return

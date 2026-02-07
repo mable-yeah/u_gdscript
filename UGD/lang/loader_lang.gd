@@ -1,4 +1,4 @@
-class_name preparser_lang
+class_name loader_lang ##extra language enums/functions that dont belong to any specific loader resource
 
 
 
@@ -129,9 +129,6 @@ const annotation_list := {
 
 
 
-
-
-
 static var global_class_list:Array[Dictionary]:
 	get():
 		if global_class_list.is_empty():
@@ -147,9 +144,7 @@ static var class_list:PackedStringArray:
 static var built_in_types:Dictionary[String,Variant.Type] = {}
 
 static func build_class_list():
-	if class_list.is_empty():
-		class_list = ClassDB.get_class_list()
+	class_list = ClassDB.get_class_list()
 
 static func build_global_class_list():
-	if global_class_list.is_empty():
-		global_class_list = ProjectSettings.get_global_class_list()
+	global_class_list = ProjectSettings.get_global_class_list()

@@ -1,6 +1,6 @@
-class_name lexer
+class_name lexer ##converts a string into usable TOKENS for the preprocessor
 
-const tk_type = tokens.type
+const tk_type = TOKENS.type
 var has_errors:bool:
 	get():
 		return !errors.is_empty()
@@ -17,7 +17,7 @@ var length:int:
 
 const tab_size := 4
 
-var last_newline:tokens.token = tokens.create_token()
+var last_newline:TOKENS.token = TOKENS.create_token()
 var pending_newline := false
 var multiline_mode := false
 var line_continuous := false
@@ -39,10 +39,10 @@ var errors = []
 var continuation_lines = []
 var indent_stack:Array[int] = []
 var paren_stack:Array[String] = []
-var tk_arr:Array[tokens.token] = []
-var last_token:tokens.token = tokens.create_token()
+var tk_arr:Array[TOKENS.token] = []
+var last_token:TOKENS.token = TOKENS.create_token()
 
-func _init(p_code,debug_print:bool = true) -> void:
+func _init(p_code,debug_print:bool = false) -> void:
 	code = lang_utilities.scrub_comments_GD(p_code)
 	
 	code = code.insert(0,'\n') + '\n' 
@@ -59,7 +59,7 @@ func _init(p_code,debug_print:bool = true) -> void:
 		debug_token_print()
 
 
-##prints the available tokens as their tk_type, and prints literals and identifiers as '%s -> %s'
+##prints the available TOKENS as their tk_type, and prints literals and identifiers as '%s -> %s'
 func debug_token_print(debug_print := true) -> String:
 	var tk_name = []
 	for token in tk_arr:
@@ -75,9 +75,9 @@ func debug_token_print(debug_print := true) -> String:
 	return '\n'.join(tk_name)
 	
 
-##advances through the length of the code string, assigning all valid characters into tokens
+##advances through the length of the code string, assigning all valid characters into TOKENS
 func tokenize() -> Array:
-	var newtoken:tokens.token = tokens.create_token()
+	var newtoken:TOKENS.token = TOKENS.create_token()
 	
 	while cursor <= length:
 		eat_whitespace()
@@ -93,8 +93,8 @@ func tokenize() -> Array:
 
 
 ##gets the current token type and advances characters, returning a new token
-func next_token() -> tokens.token:
-	var newtoken := tokens.create_token()
+func next_token() -> TOKENS.token:
+	var newtoken := TOKENS.create_token()
 	
 	if pending_newline:
 		pending_newline = false
@@ -143,7 +143,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 		return handle_newline()
 	line_continuous = false
 	
-	#catch select numbers and characters as tokens before _: does hopefully
+	#catch select numbers and characters as TOKENS before _: does hopefully
 	if is_digit(c):
 		return number()
 	elif is_unicode_identifier_start(c):
@@ -383,7 +383,7 @@ func potential_identifier():
 	if not only_ascii: #keywords are acii only
 		return make_identifier(p_str)
 	
-	var t = tokens.KEYWORDS.get(p_str)
+	var t = TOKENS.KEYWORDS.get(p_str)
 	if t != null:
 		return t 
 	
@@ -565,7 +565,7 @@ func annotation():
 	
 	var a_len = cursor - start
 	var annotation_source = span(start,a_len)
-	var annotation_tk = tokens.create_token(tk_type.ANNOTATION,annotation_source)
+	var annotation_tk = TOKENS.create_token(tk_type.ANNOTATION,annotation_source)
 	return annotation_tk
 
 
@@ -710,7 +710,7 @@ func paren_err(p_paren:String):
 
 func newline(make_token:bool = false):
 	if make_token and !pending_newline and !line_continuous:
-		var token = tokens.create_token(tk_type.NEWLINE)
+		var token = TOKENS.create_token(tk_type.NEWLINE)
 		pending_newline = true
 		last_newline = token
 		last_token = token
@@ -829,16 +829,16 @@ func make_error(st:String):
 
 ##prints error message ++ returns error token (object)
 func make_error_tk(err_str:String):
-	var token = tokens.create_token(tk_type.ERROR)
+	var token = TOKENS.create_token(tk_type.ERROR)
 	make_error(err_str)
 	return token
 
 ##creates literal token
 func make_literal(literal_str:Variant):
-	var token = tokens.create_token(tk_type.LITERAL,literal_str)
+	var token = TOKENS.create_token(tk_type.LITERAL,literal_str)
 	return token
 
 ##creates identifier token
 func make_identifier(literal_str:Variant):
-	var token = tokens.create_token(tk_type.IDENTIFIER,literal_str)
+	var token = TOKENS.create_token(tk_type.IDENTIFIER,literal_str)
 	return token

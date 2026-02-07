@@ -1,7 +1,7 @@
-class_name tokens
+class_name TOKENS
 
 
-##the differing available types of tokens
+##the differing available types of TOKENS
 enum type {
 	EMPTY,
 	# Basic
@@ -164,24 +164,24 @@ const KEYWORDS:Dictionary = {
 }
 
 ##creates a token and returns it
-static func create_token(p_type:tokens.type = tokens.type.EMPTY,p_literal:Variant = null) -> token:
+static func create_token(p_type:TOKENS.type = TOKENS.type.EMPTY,p_literal:Variant = null) -> token:
 	var tk = token.new(p_type,p_literal)
 	return tk
 
 
 class token:
-	var type:tokens.type = tokens.type.EMPTY
+	var type:TOKENS.type = TOKENS.type.EMPTY
 	var literal:Variant
 	
-	func _init(p_type:tokens.type,p_literal:Variant = null) -> void:
+	func _init(p_type:TOKENS.type,p_literal:Variant = null) -> void:
 		type = p_type
 		literal = p_literal
 
 	func get_name() -> String:
-		return tokens.type.keys()[type]
+		return TOKENS.type.keys()[type]
 	
 	func can_precede_bin_op() -> bool:
-		var types = tokens.type
+		var types = TOKENS.type
 		match type:
 			types.IDENTIFIER:
 				return true
@@ -211,7 +211,7 @@ class token:
 	
 	
 	func is_identifier() -> bool:
-		var types = tokens.type
+		var types = TOKENS.type
 		match type:
 			types.IDENTIFIER:
 				return true
@@ -231,7 +231,7 @@ class token:
 				return false
 	
 	func is_node_name() -> bool:
-		var types = tokens.type
+		var types = TOKENS.type
 		match type:
 			types.IDENTIFIER:
 				return true

@@ -1,4 +1,41 @@
-class_name lang_utilities
+class_name lang_utilities ##utilities for manipulating code in strings
+
+
+##return a basic list of script method names
+static func get_methods(value:Object) -> Array[String]:
+	var method_n_list:Array[String] = []
+	if value == null: return []
+	var script:Script = value.get_script()
+	if script == null: return []
+	var properties_list = script.get_method_list()
+	for property in properties_list:
+		var n = property.get('name')
+		method_n_list.append(n)
+	return method_n_list
+
+
+##return a basic list of script property names
+static func get_property_names(value:Object) -> Array[String]:
+	var property_n_list:Array[String] = []
+	if value == null: return []
+	var script:Script  = value.get_script()
+	if script == null: return []
+	var properties_list = script.get_script_property_list()
+	for property in properties_list:
+		var n = property.get('name')
+		if n == '' || n == 'Built-in script':
+			continue
+		property_n_list.append(n)
+	return property_n_list
+
+
+##return's true if string matches a class type or builtin type
+static func is_class_or_type(st:String,allow_type:=true) -> bool:
+	var t = get_builtin_type(st)
+	if allow_type:
+		return t != TYPE_NIL || loader_lang.class_list.has(st)
+	else:
+		return loader_lang.class_list.has(st)
 
 
 ##return from all available classes and global classes (and types)
@@ -7,20 +44,20 @@ static func get_class_or_type(st:String) -> Variant:
 	if t != TYPE_NIL:
 		return t
 	
-	if preparser_lang.class_list.has(st):
-		return preparser_lang.class_list.find(st)
+	if loader_lang.class_list.has(st):
+		return loader_lang.class_list.find(st)
 	
-	print(preparser_lang.global_class_list)
+	print(loader_lang.global_class_list)
 	
 	return -1
 
 ##'float' -> TYPE_FLOAT
 static func get_builtin_type(st_type:String) -> Variant.Type:
-	if preparser_lang.built_in_types.is_empty(): #build it if its empty
+	if loader_lang.built_in_types.is_empty(): #build it if its empty
 		for i in Variant.Type.TYPE_MAX:
 			var type = i as Variant.Type
-			preparser_lang.built_in_types[type_string(type)] = type
-	return preparser_lang.built_in_types.get(st_type,TYPE_NIL)
+			loader_lang.built_in_types[type_string(type)] = type
+	return loader_lang.built_in_types.get(st_type,TYPE_NIL)
 
 ##scrubs godot style comments, '##','#'
 static func scrub_comments_GD(script_code:String) -> String:
