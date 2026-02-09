@@ -1,10 +1,11 @@
 class_name AST ##contains classes needed to form expression tree's
 
-#jumpy jane save me
+#jane 'jumpy jane' remover save me !!
+
 ##base expression classs, all expressions extend this
 class Expr:
-	var reduced_value = null
-	var _tk_st = "NONE"
+	var reduced_value:Variant = null
+	var _tk_st:String = "NONE"
 	
 	
 	var type:loader_lang.Type = loader_lang.Type.NONE:
@@ -13,12 +14,16 @@ class Expr:
 			_tk_st = get_type_name()
 	
 	
+	func type_is(p_type:loader_lang.Type) -> bool:
+		return type == p_type
+	
+	
 	func get_type_name() -> String:
 		return loader_lang.Type.keys()[type]
 
 #variable name reference 'x'
 class variable extends Expr:
-	var name = ""
+	var name := ""
 	
 	func _init(p_name:String) -> void:
 		name = p_name
@@ -148,7 +153,7 @@ class funcDecl_Statement extends Expr:
 	var name = ""
 	var type_hint:TOKENS.token # -> (TYPE)
 	var params:Dictionary[String,Expr]
-	var body:Array = []
+	var body:Array[Expr] = []
 	
 	func _init() -> void:
 		type = loader_lang.Type.FUNCTION
@@ -156,8 +161,8 @@ class funcDecl_Statement extends Expr:
 
 class varDecl_Statement extends Expr:
 	var name:String
-	var type_hint:Variant #TOKENS.token or variant type
-	var initializer:Variant = null #non constant values can be initialized as null
+	var type_hint:TOKENS.token #TOKENS.token or variant type
+	var initializer:Expr = null #non constant values can be initialized as null
 	var is_constant:bool = false
 	
 	func _init(p_name:String,p_type_hint:Variant,p_initializer:Variant,p_is_constant:bool) -> void:
@@ -215,7 +220,6 @@ class expression_Statement extends Expr:
 
 
 class return_Statement extends Expr:
-	
 	var expression:Expr = null
 	func _init(p_expr:Expr = null) -> void:
 		type = loader_lang.Type.RETURN
@@ -272,3 +276,32 @@ class PROGRAM:
 	##returns if functions/variables are declared yet / used for header stuff
 	func contains_data():
 		return globals.size() + functions.size() > 0
+
+#just gonna list everything here just in case i need it lol
+
+#STATEMENTS
+#funcDecl_Statement 
+#varDecl_Statement 
+#pass_Statement 
+#cont_Statement 
+#break_Statement 
+#binary_Statement 
+#assign_Statement 
+#expression_Statement 
+#return_Statement 
+#for_Statement 
+#while_Statement 
+#if_Statement 
+
+#OTHER NODES
+#variable
+#literal 
+#member_Call
+#_call 
+#_enum
+#index
+#assignment 
+#unary 
+#array 
+#dictionary 
+#ternary 

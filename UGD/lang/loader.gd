@@ -15,6 +15,7 @@ var DB = ClassDB
 
 var source_code:String
 
+var program_ast:AST.PROGRAM
 
 var p_lexer:lexer
 var p_processor:preparser
@@ -34,7 +35,9 @@ func load_string(code):
 	p_processor = preparser.new(p_lexer.tk_arr)
 	if p_processor.has_errors:
 		printerr(err_message.STOPPED_AT % 'Pre-parser') ; return
+	program_ast = p_processor.program
 	
-	p_analyzer = analyzer.new(p_processor.program)
+	
+	p_analyzer = analyzer.new(program_ast)
 	if p_analyzer.has_errors:
 		printerr(err_message.STOPPED_AT % 'Analyzer') ; return

@@ -57,14 +57,16 @@ func evaluate_program() -> void:
 				continue
 			make_error('class name is already defined as "%s" in this context' %[program.class_n])
 		if check(tk_type.EXTENDS):
+			make_error(global_error_types[0] % peek().get_name())
 			advance()
-			var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
-			if has_errors:
-				continue
-			if program.extends_n == "":
-				program.extends_n = c_tk.literal
-				continue
-			make_error('class extention is already defined as "%s" in this context' %[program.extends_n])
+			#advance()
+			#var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
+			#if has_errors:
+				#continue
+			#if program.extends_n == "":
+				#program.extends_n = c_tk.literal
+				#continue
+			#make_error('class extention is already defined as "%s" in this context' %[program.extends_n])
 		
 		#rest of this is body
 		elif check(tk_type.ANNOTATION):
@@ -389,13 +391,13 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 	return AST.varDecl_Statement.new(_name.literal,_type,_initializer,is_const)
 
 ##return variable containing the 'type' needed, else null
-func parse_var_type_hint() -> AST.variable:
+func parse_var_type_hint() -> TOKENS.token:
 	if not check(tk_type.COLON):
 		return
 	advance()
 	#return the token that contains the supposed 'type' we need.. or null
 	if check(tk_type.IDENTIFIER):
-		return AST.variable.new(advance().literal)
+		return advance()
 	elif check(tk_type.EQUAL):
 		return null 
 		#return null silently, get it filled by the parsed expression's final type later on
