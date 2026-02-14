@@ -249,12 +249,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 	var _left = parse_call()
 	if has_errors:
 		return null
-	var name = null
-	
-	if _left is AST.member_Call:
-		name = _left.target.get('name')
-	else:
-		name = _left.get('name')
+	var name = _left.target.get('name') if _left is AST.member_Call else _left.get('name')
 	
 	if check(tk_type.EQUAL): #property = value
 		advance()
@@ -263,9 +258,9 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		
 		if name != null and name != '':
-			return AST.assign_Statement.new(name,_right)
+			return AST.assignment.new(AST.variable.new(name),loader_lang.Operation.OP_LOGIC_EQUAL,_right)
 		else:
-			return AST.assign_Statement.new(_left,_right)
+			return AST.assignment.new(_left,loader_lang.Operation.OP_LOGIC_EQUAL,_right)
 	
 	
 	if name != null and name != '':
@@ -284,7 +279,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			
 			var _expr = AST.binary_Statement.new(ref,op,_right)
 			
-			return AST.assign_Statement.new(name,_expr)
+			return AST.assignment.new(name,loader_lang.Operation.OP_LOGIC_EQUAL,_expr)
 		
 	
 	consume(tk_type.NEWLINE,'expected newline after expression, got %s')
@@ -488,7 +483,7 @@ func parse_or_expression(can_assign) -> AST.Expr:
 	while check(tk_type.OR) || check(tk_type.PIPE_PIPE):
 		advance()
 		var right = parse_and_expression(can_assign)
-		left = AST.assignment.new(left,loader_lang.Operation.OP_BIT_OR,right)
+		left = AST.assignment.new(left,loader_lang.Operation.OP_LOGIC_OR,right)
 
 	return left
 
@@ -497,7 +492,7 @@ func parse_and_expression(can_assign) -> AST.Expr:
 	while check(tk_type.AND):
 		advance()
 		var right = parse_equality(can_assign)
-		left = AST.assignment.new(left,loader_lang.Operation.OP_BIT_AND,right)
+		left = AST.assignment.new(left,loader_lang.Operation.OP_LOGIC_AND,right)
 	return left
 
 func parse_equality(can_assign) -> AST.Expr:
@@ -594,9 +589,8 @@ func parse_call() -> AST.Expr:
 						break
 					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments, got %s instead')
-			var func_name = expr.get('name')
-			if func_name != null:
-				return AST._call.new(func_name,arg)
+			if expr.get('name') != null:
+				return AST.member_Call.new(expr,arg)
 			make_error('invalid call to type of "%s"' % expr.get_type_name())
 		
 		elif check(tk_type.BRACKET_OPEN): #arr[0]

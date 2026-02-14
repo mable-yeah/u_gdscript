@@ -5,29 +5,6 @@ class_name loader_lang ##extra language enums/functions that dont belong to any 
 
 
 
-const Operation_String = {
-	Operation.OP_ADDITION:'+',
-	Operation.OP_SUBTRACTION:'-',
-	Operation.OP_MULTIPLICATION:'*',
-	Operation.OP_DIVISION:'/',
-	Operation.OP_MODULO:'%',
-	Operation.OP_POWER:'^',
-	Operation.OP_BIT_LEFT_SHIFT: '',
-	Operation.OP_BIT_RIGHT_SHIFT: '',
-	Operation.OP_BIT_AND: '',
-	Operation.OP_BIT_OR: '|',
-	Operation.OP_BIT_XOR: '',
-	Operation.OP_LOGIC_AND: '&',
-	Operation.OP_LOGIC_OR: '',
-	Operation.OP_CONTENT_TEST: '',
-	Operation.OP_COMP_EQUAL: '==',
-	Operation.OP_COMP_NOT_EQUAL: '!=',
-	Operation.OP_COMP_LESS: '',
-	Operation.OP_COMP_LESS_EQUAL: '',
-	Operation.OP_COMP_GREATER : '',
-	Operation.OP_COMP_GREATER_EQUAL: '',
-};
-
 enum Operation {
 	OP_ADDITION,
 	OP_SUBTRACTION,
@@ -42,6 +19,7 @@ enum Operation {
 	OP_BIT_XOR,
 	OP_LOGIC_AND,
 	OP_LOGIC_OR,
+	OP_LOGIC_EQUAL,
 	OP_CONTENT_TEST,
 	OP_COMP_EQUAL,
 	OP_COMP_NOT_EQUAL,

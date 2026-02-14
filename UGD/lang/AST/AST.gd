@@ -52,16 +52,6 @@ class member_Call extends Expr: #.function(expression)
 		args = arguments
 
 
-class _call extends Expr: #(expression)
-	var name:String
-	var args:Array[Expr]
-	
-	func _init(p_target:String,arguments:Array[Expr] = []) -> void:
-		type = loader_lang.Type.CALL
-		name = p_target
-		args = arguments
-
-
 class _enum extends Expr: #enum foo {bar,fungus = 1}
 	var enumerators:Array[Dictionary] = []
 	
@@ -201,14 +191,7 @@ class binary_Statement extends Expr:
 		right = p_right
 
 
-class assign_Statement extends Expr:
-	var left:Variant #String (representing a variable) or Expr
-	var right:Expr
-	
-	func _init(p_left:Variant,p_right:Expr) -> void:
-		type = loader_lang.Type.ASSIGNMENT
-		right = p_right
-		left = p_left
+
 
 
 class expression_Statement extends Expr:
@@ -286,7 +269,6 @@ class PROGRAM:
 #cont_Statement 
 #break_Statement 
 #binary_Statement 
-#assign_Statement 
 #expression_Statement 
 #return_Statement 
 #for_Statement 
@@ -297,7 +279,6 @@ class PROGRAM:
 #variable
 #literal 
 #member_Call
-#_call 
 #_enum
 #index
 #assignment 

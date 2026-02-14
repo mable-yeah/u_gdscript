@@ -19,7 +19,7 @@ var program_ast:AST.PROGRAM
 
 var p_lexer:lexer
 var p_processor:preparser
-var p_analyzer:analyzer
+var p_compiler:compiler
 
 const err_message = {
 	STOPPED_AT = 'UGD scripting stopped at %s .'
@@ -37,7 +37,6 @@ func load_string(code):
 		printerr(err_message.STOPPED_AT % 'Pre-parser') ; return
 	program_ast = p_processor.program
 	
-	
-	p_analyzer = analyzer.new(program_ast)
-	if p_analyzer.has_errors:
-		printerr(err_message.STOPPED_AT % 'Analyzer') ; return
+	p_compiler = compiler.new(program_ast)
+	if p_compiler.has_errors:
+		printerr(err_message.STOPPED_AT % 'Compiler') ; return
