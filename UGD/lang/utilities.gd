@@ -1,6 +1,49 @@
 class_name lang_utilities ##utilities for manipulating code in strings
 
 
+
+##gets string from type hint token
+func get_type_hint(tk:TOKENS.token) -> String:
+	if tk == null:return ""
+	const types = TOKENS.type
+	match tk.type:
+		types.TK_VOID:
+			return 'void'
+		types.IDENTIFIER:
+			return tk.literal
+	printerr('could not determine type from token %s' % tk.get_name())
+	return ""
+
+##returns operation enum as string
+func get_op_st(op:loader_lang.Operation) -> String:
+	var op_enum = loader_lang.Operation
+	match op:
+		op_enum.OP_ADDITION:return '+'
+		op_enum.OP_SUBTRACTION:return  '-' 
+		op_enum.OP_MULTIPLICATION:return  '*' 
+		op_enum.OP_DIVISION:return  '/' 
+		op_enum.OP_MODULO:return  '%' 
+		op_enum.OP_POWER:return  '**' 
+		op_enum.OP_BIT_LEFT_SHIFT:return  '<<' 
+		op_enum.OP_BIT_RIGHT_SHIFT:return  '>>' 
+		op_enum.OP_BIT_AND:return  '&' 
+		op_enum.OP_BIT_OR:return  '|' 
+		op_enum.OP_BIT_XOR:return  '^' 
+		op_enum.OP_COMP_EQUAL:return  '==' 
+		op_enum.OP_COMP_NOT_EQUAL:return  '!=' 
+		op_enum.OP_COMP_LESS:return  '<' 
+		op_enum.OP_COMP_LESS_EQUAL:return  '<=' 
+		op_enum.OP_COMP_GREATER:return  '>' 
+		op_enum.OP_COMP_GREATER_EQUAL:return  '>='
+		op_enum.OP_LOGIC_OR: return '||'
+		op_enum.OP_LOGIC_AND: return '&&'
+		op_enum.OP_LOGIC_EQUAL: return '='
+		_: printerr('could not find operation at index %s' % op) ; return ''
+
+
+
+
+
 ##return a basic list of script method names
 static func get_methods(value:Object) -> Array[String]:
 	var method_n_list:Array[String] = []

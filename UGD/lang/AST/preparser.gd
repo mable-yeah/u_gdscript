@@ -249,19 +249,22 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 	var _left = parse_call()
 	if has_errors:
 		return null
-	var name = _left.target.get('name') if _left is AST.member_Call else _left.get('name')
+	
+	var name = null
+	if _left is AST.variable:
+		name = _left.name
+	elif _left is AST.member_Call and _left.target is AST.variable:
+		name = _left.target.name
 	
 	if check(tk_type.EQUAL): #property = value
 		advance()
 		var _right = parse_expression()
-		
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		
 		if name != null and name != '':
 			return AST.assignment.new(AST.variable.new(name),loader_lang.Operation.OP_LOGIC_EQUAL,_right)
 		else:
 			return AST.assignment.new(_left,loader_lang.Operation.OP_LOGIC_EQUAL,_right)
-	
 	
 	if name != null and name != '':
 		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
@@ -590,15 +593,14 @@ func parse_call() -> AST.Expr:
 					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments, got %s instead')
 			if expr.get('name') != null:
-				return AST.member_Call.new(expr,arg)
+				expr =  AST.member_Call.new(expr,arg)
+				continue
 			make_error('invalid call to type of "%s"' % expr.get_type_name())
-		
 		elif check(tk_type.BRACKET_OPEN): #arr[0]
 			advance()
 			var ind = parse_expression()
 			consume(tk_type.BRACKET_CLOSE,'expected closing bracket')
-			return AST.index.new(expr,ind)
-		
+			expr = AST.index.new(expr,ind)
 		elif check(tk_type.PERIOD): #.property
 			advance()
 			var arg:Array[AST.Expr] = []
@@ -620,9 +622,8 @@ func parse_call() -> AST.Expr:
 							break
 						advance()
 				consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after "." property arguments')
-
 			
-			return AST.member_Call.new(expr,arg)
+			expr = AST.member_Call.new(expr,arg)
 		else:
 			break
 	
@@ -635,8 +636,9 @@ func parse_primary() -> AST.Expr:
 
 	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
+		var tk = advance()
 		var lit:AST.literal
-		match current_token.literal:
+		match tk.literal:
 			'true':
 				lit = AST.literal.new(true)
 			'false':
@@ -645,8 +647,7 @@ func parse_primary() -> AST.Expr:
 				lit = AST.literal.new(null)
 			_:
 				#digits/strings are inferred, the literal is already in the correct typing
-				lit = AST.literal.new(current_token.literal)
-		advance()
+				lit = AST.literal.new(tk.literal)
 		return lit
 	
 	#VARIABLE/OBJECT NAME
