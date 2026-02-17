@@ -178,22 +178,6 @@ class break_Statement extends Expr:
 		type = loader_lang.Type.BREAK
 
 
-class binary_Statement extends Expr:
-	var left:Expr
-	var op:loader_lang.Operation
-	var right:Expr
-	
-	
-	func _init(p_left:Expr,p_op:loader_lang.Operation,p_right:Expr) -> void:
-		type = loader_lang.Type.BINARY_OPERATOR
-		left = p_left
-		op = p_op
-		right = p_right
-
-
-
-
-
 class expression_Statement extends Expr:
 	var expression:Expr
 	

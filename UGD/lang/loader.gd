@@ -40,3 +40,14 @@ func load_string(code):
 	p_compiler = compiler.new(program_ast)
 	if p_compiler.has_errors:
 		printerr(err_message.STOPPED_AT % 'Compiler') ; return
+
+##packs the given string as a node
+##WARNING this doesn't error handle the code itself, thats what load_string() is for
+func pack_string_as_node(code:String,node:Variant = RefCounted.new()):
+	if code == '' || node == null:
+		return
+	var script = GDScript.new()
+	script.set_source_code(code)
+	script.reload()
+	node.set_script(script)
+	return node

@@ -280,7 +280,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
 				op = loader_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else loader_lang.Operation.OP_DIVISION
 			
-			var _expr = AST.binary_Statement.new(ref,op,_right)
+			var _expr = AST.assignment.new(ref,op,_right)
 			
 			return AST.assignment.new(name,loader_lang.Operation.OP_LOGIC_EQUAL,_expr)
 		
@@ -413,7 +413,6 @@ func consume(type:tk_type,message:String) -> TOKENS.token:
 	
 	if message.contains('%s'):
 		message = message % p.get_name()
-	
 	make_error(message)
 	return p
 
