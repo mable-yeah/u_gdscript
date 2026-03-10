@@ -10,14 +10,13 @@ var length:int:
 var cursor := 0
 var current_token:TOKENS.token = null
 
-var annotations = []
+#var annotations = []
 
 #whenever an error has multiple locations it can be used, define it here pls
 #else just typing in the error is fine lol
 var global_error_types = {
 	0:'disallowed expression in UGD, "%s"',
 	1:'disallowed expression in the current scope %s',
-	
 }
 
 
@@ -40,9 +39,8 @@ func _init(p_tk:Array[TOKENS.token]) -> void:
 func evaluate_program() -> void:
 	while !is_at_end(): 
 		if check(tk_type.INDENT):
-			printerr('indent in class body')
+			make_error('indent in class body')
 			advance()
-		
 		
 		if (check(tk_type.CLASS_NAME) || check(tk_type.EXTENDS)) and program.contains_data():
 			make_error('header %s defined after class functions/variables' % peek().get_name())
@@ -348,13 +346,16 @@ func parse_if() -> AST.if_Statement:
 	var else_expr:Array[AST.Expr] = []
 	
 	skip_newlines()
+	
 	if check(tk_type.ELIF):
 		else_expr.push_back(parse_if())
 	elif check(tk_type.ELSE):
+		advance()
 		consume(tk_type.COLON,'expected ":" after else')
 		skip_newlines()
 		consume(tk_type.INDENT,'expected "indent" after if statement')
 		else_expr = parse_scope_block()
+	
 	if has_errors:
 		return null
 	return AST.if_Statement.new(expression,then_expr,else_expr)
@@ -418,7 +419,6 @@ func consume(type:tk_type,message:String) -> TOKENS.token:
 
 ##matches type, doesnt throw error if false
 func check(type:tk_type,tk := peek()) -> bool:
-	#printerr(tk.get_name())
 	if is_at_end() || tk == null: return false
 	return tk.type == type
 
@@ -531,10 +531,7 @@ func parse_comparison() -> AST.Expr:
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
 				op = loader_lang.Operation.OP_COMP_LESS
-		
-		
 		left = AST.assignment.new(left,op,right)
-	
 	return left
 
 func parse_term() -> AST.Expr:
@@ -592,7 +589,7 @@ func parse_call() -> AST.Expr:
 					advance()
 			consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after arguments, got %s instead')
 			if expr.get('name') != null:
-				expr =  AST.member_Call.new(expr,arg)
+				expr =  AST.function_call.new(expr,arg)
 				continue
 			make_error('invalid call to type of "%s"' % expr.get_type_name())
 		elif check(tk_type.BRACKET_OPEN): #arr[0]
@@ -602,27 +599,10 @@ func parse_call() -> AST.Expr:
 			expr = AST.index.new(expr,ind)
 		elif check(tk_type.PERIOD): #.property
 			advance()
-			var arg:Array[AST.Expr] = []
-			
-			if check(tk_type.IDENTIFIER): #add property to array
-				arg.push_back(parse_expression(false))
-			
-			if check(tk_type.PERIOD): #if property is '.property.value()' continue chain
-				advance()
-				arg.push_back(parse_expression())
-				
-			
-			if check(tk_type.PARENTHESIS_OPEN): #+ parameters
-				advance()
-				if !check(tk_type.PARENTHESIS_CLOSE):
-					while true:
-						arg.push_back(parse_expression())
-						if !check(tk_type.COMMA):
-							break
-						advance()
-				consume(tk_type.PARENTHESIS_CLOSE,'expected closing parenthesis after "." property arguments')
-			
-			expr = AST.member_Call.new(expr,arg)
+			var member:AST.Expr
+			if check(tk_type.IDENTIFIER): member = parse_expression(false)
+			if member == null: break
+			expr = AST.member_Call.new(expr,member)
 		else:
 			break
 	
@@ -710,9 +690,7 @@ func parse_primary() -> AST.Expr:
 					make_error('expected identifier or string as Lua-style dictionary key, got %s' % expr.get_type_name())
 					return null
 				key.reduced_value = key.name \
-				if key.type == loader_lang.Type.IDENTIFIER else \
-				str(key.variant)
-				#print(key.reduced_value)
+				if key.type == loader_lang.Type.IDENTIFIER else str(key.variant)
 				#this all helps with grabbing proper key names inside of lua tables :p
 				#however python styling doesnt follow these rules
 			

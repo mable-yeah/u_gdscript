@@ -1,14 +1,17 @@
-class_name compiler 
+class_name compiler extends AST.PROGRAM
 
 var has_errors := false
-var program:AST.PROGRAM
 var code:String = ''
 
-func _init(p_program:AST.PROGRAM) -> void:
-	program = p_program
-
+var indentation:int = 0
 func make_error(st:String) -> void:
 	has_errors = true
 	var generic = 'Compiler error: \' %s \''
 	printerr(generic % st)
 	return
+
+func _init(p_ast:AST.PROGRAM) -> void:
+	self.class_n =  p_ast.class_n
+	self.extends_n = p_ast.extends_n
+	self.globals = p_ast.globals
+	self.functions = p_ast.functions

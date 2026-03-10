@@ -2,12 +2,10 @@ class_name AST ##contains classes needed to form expression tree's
 
 #jane 'jumpy jane' remover save me !!
 
+
 ##base expression classs, all expressions extend this
 class Expr:
-	var reduced_value:Variant = null
 	var _tk_st:String = "NONE"
-	
-	
 	var type:loader_lang.Type = loader_lang.Type.NONE:
 		set(p_type):
 			type = p_type
@@ -20,17 +18,20 @@ class Expr:
 	
 	func get_type_name() -> String:
 		return loader_lang.Type.keys()[type]
+	
 
-#variable name reference 'x'
-class variable extends Expr:
-	var name := ""
+
+class variable extends Expr: ##variable name reference 'x'
+	var name:String = ''
 	
 	func _init(p_name:String) -> void:
 		name = p_name
 		type = loader_lang.Type.IDENTIFIER
+		
 
-#passing in the value 'true' should infer the type of 'bool',
-#i.e passing in the string "true" should infer 'string' 
+
+##passing in the value 'true' should infer the type of 'bool',
+##i.e passing in the string "true" should infer 'string' 
 class literal extends Expr:
 	var literal_type:Variant.Type = Variant.Type.TYPE_NIL
 	var variant:Variant = null
@@ -40,35 +41,59 @@ class literal extends Expr:
 		variant = p_variant
 		literal_type = typeof(p_variant) as Variant.Type
 		type = loader_lang.Type.LITERAL
+	
 
 
-class member_Call extends Expr: #.function(expression)
+
+##'target(argument)'
+class function_call extends Expr: 
 	var target:Expr
 	var args:Array[Expr]
 	
 	func _init(p_target:Expr,arguments:Array[Expr] = []) -> void:
-		type = loader_lang.Type.CALL
+		type = loader_lang.Type.FUNC_CALL
 		target = p_target
 		args = arguments
+	
+
+##'target.function'
+class member_Call extends Expr: 
+	var target:Expr
+	var member:Expr
+	
+	func _init(p_target:Expr,arg:Expr) -> void:
+		type = loader_lang.Type.MEMBER_CALL
+		target = p_target
+		member = arg
+	
 
 
-class _enum extends Expr: #enum foo {bar,fungus = 1}
+
+
+##enum foo {bar,fungus = 1}
+class _enum extends Expr: 
 	var enumerators:Array[Dictionary] = []
 	
 	func _init(p_enum:Array[Dictionary]) -> void:
 		type = loader_lang.Type.ENUM
 		enumerators = p_enum
+	
 
-class index extends Expr: #arr[expression]
+
+##arr[expression]
+class index extends Expr: 
 	var target:Expr
 	var idx:Expr
 	
 	func _init(p_target:Expr,p_ind:Expr) -> void:
-		type = loader_lang.Type.CALL
+		type = loader_lang.Type.INDEX
 		target = p_target 
 		idx = p_ind
+	
 
 
+
+##exp1 +/=/> expr2
 class assignment extends Expr:
 	var left:Expr
 	var op:loader_lang.Operation
@@ -81,6 +106,7 @@ class assignment extends Expr:
 		right = RIGHT
 
 
+##-(1 - 1) || !(1 - 1)
 class unary extends Expr:
 	enum Operation {OP_NEGATIVE,OP_NOT}
 	
@@ -93,6 +119,8 @@ class unary extends Expr:
 		operand = p_operand
 
 
+
+##[value1,value2]
 class array extends Expr:
 	var elements:Array[Expr] = []
 	
@@ -100,6 +128,7 @@ class array extends Expr:
 		type = loader_lang.Type.ARRAY
 
 
+##{0 = 'string'} || {0 : 'not_string'}
 class dictionary extends Expr:
 	enum styling {
 		NONE,
@@ -110,7 +139,6 @@ class dictionary extends Expr:
 	var style:styling = styling.NONE
 	var elements:Dictionary = {}
 	
-	#supply with check(TOKEN_TYPE) from the preprocessor
 	func decide_style(EQUAL:bool,COLON:bool):
 		if style != styling.NONE:
 			return 
@@ -119,14 +147,14 @@ class dictionary extends Expr:
 		elif COLON:
 			style = styling.LUA_TABLE
 
-
-
 	func _init() -> void:
 		type = loader_lang.Type.DICTIONARY
 
+
+##x if z else y
 class ternary extends Expr:
 	var target:Expr #x
-	var left:Expr #if __ else
+	var left:Expr #if z else
 	var right:Expr #y
 	#x if bool_here else y
 	
@@ -135,10 +163,13 @@ class ternary extends Expr:
 		target = p_target
 		left = p_left
 		right = p_right
+	
+
 
 
 #STATEMENT EXPR
 
+##func statement() -> hint:body
 class funcDecl_Statement extends Expr:
 	var name = ""
 	var type_hint:TOKENS.token # -> (TYPE)
@@ -149,6 +180,7 @@ class funcDecl_Statement extends Expr:
 		type = loader_lang.Type.FUNCTION
 
 
+##(const?) var = expression
 class varDecl_Statement extends Expr:
 	var name:String
 	var type_hint:TOKENS.token #TOKENS.token or variant type
@@ -168,6 +200,7 @@ class pass_Statement extends Expr:
 		type = loader_lang.Type.PASS
 
 
+
 class cont_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.CONTINUE
@@ -178,12 +211,16 @@ class break_Statement extends Expr:
 		type = loader_lang.Type.BREAK
 
 
+
+
 class expression_Statement extends Expr:
 	var expression:Expr
 	
 	func _init(p_expr:Expr) -> void:
-		type = loader_lang.Type.LITERAL
+		type = loader_lang.Type.EXPRESSION
 		expression = p_expr
+
+
 
 
 class return_Statement extends Expr:
@@ -191,8 +228,11 @@ class return_Statement extends Expr:
 	func _init(p_expr:Expr = null) -> void:
 		type = loader_lang.Type.RETURN
 		expression = p_expr
+	
 
 
+
+##for x in iter: body
 class for_Statement extends Expr:
 	var name:String #name of iterator variable 'x'
 	var iter:Expr #expression to iterate on.. like an array or something
@@ -206,16 +246,18 @@ class for_Statement extends Expr:
 		iter = p_iter
 
 
+##while condition: body
 class while_Statement extends Expr:
 	var condition:Expr
-	var body:Expr
+	var body:Array[Expr]
 	
-	func _init(p_condition:Expr,p_body:Expr) -> void:
+	func _init(p_condition:Expr,p_body:Array[Expr]) -> void:
 		type = loader_lang.Type.WHILE
 		condition = p_condition
 		body = p_body
 
 
+##if condition: then_body else: else_body
 class if_Statement extends Expr:
 	var condition:Expr
 	var _then:Array[Expr] = []
@@ -228,6 +270,8 @@ class if_Statement extends Expr:
 		_else = p_else
 
 
+
+##container for the whole program
 class PROGRAM: 
 	var class_n:String 
 	var extends_n:String
@@ -243,30 +287,3 @@ class PROGRAM:
 	##returns if functions/variables are declared yet / used for header stuff
 	func contains_data():
 		return globals.size() + functions.size() > 0
-
-#just gonna list everything here just in case i need it lol
-
-#STATEMENTS
-#funcDecl_Statement 
-#varDecl_Statement 
-#pass_Statement 
-#cont_Statement 
-#break_Statement 
-#binary_Statement 
-#expression_Statement 
-#return_Statement 
-#for_Statement 
-#while_Statement 
-#if_Statement 
-
-#OTHER NODES
-#variable
-#literal 
-#member_Call
-#_enum
-#index
-#assignment 
-#unary 
-#array 
-#dictionary 
-#ternary 

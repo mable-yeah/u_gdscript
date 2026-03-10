@@ -3,7 +3,7 @@ class_name lang_utilities ##utilities for manipulating code in strings
 
 
 ##gets string from type hint token
-func get_type_hint(tk:TOKENS.token) -> String:
+static func get_type_hint(tk:TOKENS.token) -> String:
 	if tk == null:return ""
 	const types = TOKENS.type
 	match tk.type:
@@ -15,7 +15,7 @@ func get_type_hint(tk:TOKENS.token) -> String:
 	return ""
 
 ##returns operation enum as string
-func get_op_st(op:loader_lang.Operation) -> String:
+static func get_op_st(op:loader_lang.Operation) -> String:
 	var op_enum = loader_lang.Operation
 	match op:
 		op_enum.OP_ADDITION:return '+'
