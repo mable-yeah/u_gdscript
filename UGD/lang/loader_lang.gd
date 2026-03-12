@@ -53,6 +53,7 @@ enum Type {
 	INDEX
 }
 
+
 static var global_class_list:Array[Dictionary]:
 	get():
 		if global_class_list.is_empty():

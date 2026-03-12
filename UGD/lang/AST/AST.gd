@@ -78,11 +78,13 @@ class member_Call extends Expr:
 
 ##enum foo {bar,fungus = 1}
 class enumerator extends Expr: 
+	var name:String
 	var enumerators:Array[Dictionary] = []
 	
-	func _init(p_enum:Array[Dictionary]) -> void:
+	func _init(p_name:String,p_enum:Array[Dictionary]) -> void:
 		type = loader_lang.Type.ENUM
 		enumerators = p_enum
+		name = p_name
 	
 	func accept():
 		return visitor.visit_enum(self)
@@ -315,10 +317,10 @@ class PROGRAM:
 		get():
 			return class_n != "" || extends_n != ""
 	
-	
-	var globals:Array[varDecl_Statement]
-	var functions:Array[funcDecl_Statement]
+	var misc:Array[Expr] ##used for any expression in the body that isnt a function or variable
+	var globals:Array[varDecl_Statement] ##used for variants declared in the class body
+	var functions:Array[funcDecl_Statement] ##used for functions declared
 	
 	##returns if functions/variables are declared yet / used for header stuff
 	func contains_data():
-		return globals.size() + functions.size() > 0
+		return globals.size() + functions.size() + misc.size() > 0

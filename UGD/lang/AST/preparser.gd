@@ -74,7 +74,7 @@ func evaluate_program() -> void:
 			var _declaration = parse_enum_declaration()
 			if has_errors:
 				break
-			program.globals.push_back(_declaration)
+			program.misc.push_back(_declaration)
 		elif check(tk_type.TK_CONST):
 			advance()
 			var _declaration = parse_var_declaration(true)
@@ -113,7 +113,7 @@ func skip_newlines(ignore_indents := false) -> void:
 		advance()
 
 
-func parse_enum_declaration() -> AST.varDecl_Statement:
+func parse_enum_declaration() -> AST.enumerator:
 	advance()
 	var _name = consume(tk_type.IDENTIFIER,'expected enum name, got %s')
 	#technically you can use enums without a name BUT i no no wanna do tha
@@ -141,11 +141,7 @@ func parse_enum_declaration() -> AST.varDecl_Statement:
 	consume(tk_type.BRACE_CLOSE,'expected closing } after enum, got %s')
 	if has_errors:
 		return null
-	var expr = AST.enumerator.new(_enumerators)
-	return AST.varDecl_Statement.new(_name.literal,AST.variable.new('int'),expr,true)
-	#for the sake of consistency and cleanness in program.globals, just store enums like a variable
-	#but make it constant even though it ISNT a traditional variable
-
+	return AST.enumerator.new(_name.literal,_enumerators)
 
 
 func parse_func_declaration() -> AST.funcDecl_Statement:

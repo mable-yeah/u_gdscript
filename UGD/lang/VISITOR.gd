@@ -66,14 +66,24 @@ static func visit_array(expr:AST.array):
 		packed.append(member.accept())
 	return '[%s]' % ','.join(packed)
 
-@warning_ignore("unused_parameter")
-static func visit_dictionary(expr:AST.dictionary): 
-	pass
+static func visit_dictionary(expr:AST.dictionary):
+	var dict:PackedStringArray = []
+	var dict_ch = ':' if expr.style == expr.styling.LUA_TABLE else '='
+	for element in expr.elements:
+		dict.append('%s %s %s' % [element.accept(),dict_ch,expr.elements[element].accept()])
+	return '{%s}' % ','.join(dict)
 
-@warning_ignore("unused_parameter")
 static func visit_enum(expr:AST.enumerator):
-	pass
+	var pairs:PackedStringArray = []
+	for enumerator in expr.enumerators: 
+		#enum values cannot be expressions or expr strings; so i dont need to .accept them :D
+		var name = enumerator.keys()[0]
+		var value = enumerator[name]
+		pairs.append('%s = %s' % [name,value])
+	return 'enum %s {%s}' % [expr.name,','.join(pairs)]
 
+#technicawwy doing it this way causes elifs to decondense into if else but it SHOULDNT effect much
+#since this is internal code
 static func visit_if(stmt:AST.if_Statement): 
 	var body = parse_body(stmt._then)
 	var else_body = parse_body(stmt._else)
