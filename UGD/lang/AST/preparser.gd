@@ -569,10 +569,10 @@ func parse_factor() -> AST.Expr:
 	return left
 
 func parse_unary() -> AST.Expr:
-	if check(tk_type.MINUS,peek()) || check(tk_type.NOT,peek()):
+	if check(tk_type.BANG,peek()) || check(tk_type.NOT,peek()):
 		var op_t = advance()
 		var operand = parse_unary()
-		var op = operator_type.OP_NEGATIVE if check(tk_type.MINUS,op_t) else operator_type.OP_NOT 
+		var op = operator_type.OP_NEGATIVE if check(tk_type.BANG,op_t) else operator_type.OP_NOT 
 		return AST.unary.new(operand,op)
 	return parse_call()
 

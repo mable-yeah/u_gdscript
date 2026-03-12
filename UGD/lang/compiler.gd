@@ -15,9 +15,15 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	self.extends_n = p_ast.extends_n
 	self.globals = p_ast.globals
 	self.functions = p_ast.functions
+	pack_code()
+
+func pack_code():
+	var packed:PackedStringArray = []
 	
-	for global in globals:
-		print(global.accept())
+	var class_st = 'class_name %s' % class_n
+	if class_n != '':  packed.append(class_st)
 	
-	for function in functions:
-		print(function.accept())
+	for global in globals + functions:
+		packed.append(global.accept())
+	
+	print('\n'.join(packed))
