@@ -190,7 +190,7 @@ class ternary extends Expr:
 class funcDecl_Statement extends Expr:
 	var name = ""
 	var type_hint:TOKENS.token # -> (TYPE)
-	var params:Dictionary[String,Expr]
+	var params:Dictionary[String,varDecl_Statement]
 	var body:Array[Expr] = []
 	
 	func _init() -> void:
@@ -215,8 +215,8 @@ class varDecl_Statement extends Expr:
 		is_constant = p_is_constant
 
 	
-	func accept():
-		return visitor.visit_var_decl(self)
+	func accept(needs_body := true):
+		return visitor.visit_var_decl(self,needs_body)
 class pass_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.PASS

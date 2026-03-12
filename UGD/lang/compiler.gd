@@ -18,3 +18,6 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	
 	for global in globals:
 		print(global.accept())
+	
+	for function in functions:
+		print(function.accept())

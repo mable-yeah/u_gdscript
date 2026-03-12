@@ -153,20 +153,24 @@ func parse_func_declaration() -> AST.funcDecl_Statement:
 	var statement = AST.funcDecl_Statement.new()
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name')
 	var _type = null
-	var params:Dictionary[String,AST.Expr]
+	var params:Dictionary[String,AST.varDecl_Statement]
 	
 	#define parameters 
 	consume(tk_type.PARENTHESIS_OPEN, "expected '(' after function name")
 	if !check(tk_type.PARENTHESIS_CLOSE):
+		var was_optional:= false
 		while true:
 			var expression = parse_var_declaration(false,false)
+			if has_errors || expression == null:
+				break
+				
+			if expression.initializer != null: was_optional = true
+			if was_optional and expression.initializer == null: 
+				make_error('cannot have mandatory params after optional params.') ; break
+			
 			if params.has(expression.name):
 				make_error('parameter "%s" was already declared for this function' % expression.name)
 				break
-			if expression == null:
-				make_error('null as expression :/')
-				break
-			
 			params[expression.name] = expression
 			
 			if !check(tk_type.COMMA):
