@@ -1,6 +1,6 @@
 class_name preparser ##uses the lexer's generated TOKENS to create an AST
 
-
+const operator_type = loader_lang.Operation
 var tk_arr:Array[TOKENS.token] = []
 var length:int:
 	get():
@@ -108,9 +108,9 @@ func skip_newlines(ignore_indents := false) -> void:
 	if !ignore_indents:
 		while check(tk_type.NEWLINE):
 			advance()
-	else: 
-		while check(tk_type.NEWLINE) || check(tk_type.INDENT) || check(tk_type.DEDENT):
-			advance()
+		return
+	while check(tk_type.NEWLINE) || check(tk_type.INDENT) || check(tk_type.DEDENT):
+		advance()
 
 
 func parse_enum_declaration() -> AST.varDecl_Statement:
@@ -141,10 +141,10 @@ func parse_enum_declaration() -> AST.varDecl_Statement:
 	consume(tk_type.BRACE_CLOSE,'expected closing } after enum, got %s')
 	if has_errors:
 		return null
-	var expr = AST._enum.new(_enumerators)
+	var expr = AST.enumerator.new(_enumerators)
 	return AST.varDecl_Statement.new(_name.literal,AST.variable.new('int'),expr,true)
 	#for the sake of consistency and cleanness in program.globals, just store enums like a variable
-	#but make it constant
+	#but make it constant even though it ISNT a traditional variable
 
 
 
@@ -260,9 +260,9 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		
 		if name != null and name != '':
-			return AST.assignment.new(AST.variable.new(name),loader_lang.Operation.OP_LOGIC_EQUAL,_right)
+			return AST.assignment.new(AST.variable.new(name),operator_type.OP_LOGIC_EQUAL,_right)
 		else:
-			return AST.assignment.new(_left,loader_lang.Operation.OP_LOGIC_EQUAL,_right)
+			return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right)
 	
 	if name != null and name != '':
 		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
@@ -272,15 +272,15 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			var _right = parse_expression()
 			consume(tk_type.NEWLINE,'expected newline after op assignment')
 
-			var op:loader_lang.Operation
+			var op:operator_type
 			if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
-				op = loader_lang.Operation.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else loader_lang.Operation.OP_SUBTRACTION
+				op = operator_type.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else operator_type.OP_SUBTRACTION
 			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
-				op = loader_lang.Operation.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else loader_lang.Operation.OP_DIVISION
+				op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
 			
 			var _expr = AST.assignment.new(ref,op,_right)
 			
-			return AST.assignment.new(name,loader_lang.Operation.OP_LOGIC_EQUAL,_expr)
+			return AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
 		
 	
 	consume(tk_type.NEWLINE,'expected newline after expression, got %s')
@@ -485,7 +485,7 @@ func parse_or_expression(can_assign) -> AST.Expr:
 	while check(tk_type.OR) || check(tk_type.PIPE_PIPE):
 		advance()
 		var right = parse_and_expression(can_assign)
-		left = AST.assignment.new(left,loader_lang.Operation.OP_LOGIC_OR,right)
+		left = AST.assignment.new(left,operator_type.OP_LOGIC_OR,right)
 
 	return left
 
@@ -494,7 +494,7 @@ func parse_and_expression(can_assign) -> AST.Expr:
 	while check(tk_type.AND):
 		advance()
 		var right = parse_equality(can_assign)
-		left = AST.assignment.new(left,loader_lang.Operation.OP_LOGIC_AND,right)
+		left = AST.assignment.new(left,operator_type.OP_LOGIC_AND,right)
 	return left
 
 func parse_equality(can_assign) -> AST.Expr:
@@ -504,8 +504,8 @@ func parse_equality(can_assign) -> AST.Expr:
 			var op_t = advance()
 			var right = parse_comparison()
 			
-			var op = loader_lang.Operation.OP_COMP_EQUAL \
-			if check(tk_type.EQUAL_EQUAL,op_t) else loader_lang.Operation.OP_COMP_NOT_EQUAL
+			var op = operator_type.OP_COMP_EQUAL \
+			if check(tk_type.EQUAL_EQUAL,op_t) else operator_type.OP_COMP_NOT_EQUAL
 			
 			left = AST.assignment.new(left,op,right)
 	
@@ -521,16 +521,16 @@ func parse_comparison() -> AST.Expr:
 		var op
 		match op_t.type:
 			tk_type.LESS_EQUAL:
-				op = loader_lang.Operation.OP_COMP_LESS_EQUAL
+				op = operator_type.OP_COMP_LESS_EQUAL
 			tk_type.LESS:
-				op = loader_lang.Operation.OP_COMP_LESS
+				op = operator_type.OP_COMP_LESS
 			tk_type.GREATER:
-				op = loader_lang.Operation.OP_COMP_GREATER
+				op = operator_type.OP_COMP_GREATER
 			tk_type.GREATER_EQUAL:
-				op = loader_lang.Operation.OP_COMP_GREATER_EQUAL
+				op = operator_type.OP_COMP_GREATER_EQUAL
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
-				op = loader_lang.Operation.OP_COMP_LESS
+				op = operator_type.OP_COMP_LESS
 		left = AST.assignment.new(left,op,right)
 	return left
 
@@ -539,7 +539,7 @@ func parse_term() -> AST.Expr:
 	while check(tk_type.PLUS) || check(tk_type.MINUS):
 		var op_t = advance()
 		var right = parse_factor()
-		var op = loader_lang.Operation.OP_ADDITION if check(tk_type.PLUS,op_t) else loader_lang.Operation.OP_SUBTRACTION
+		var op = operator_type.OP_ADDITION if check(tk_type.PLUS,op_t) else operator_type.OP_SUBTRACTION
 		left = AST.assignment.new(left,op,right)
 	
 	return left
@@ -553,14 +553,14 @@ func parse_factor() -> AST.Expr:
 		
 		match op_t.type:
 			tk_type.STAR:
-				op = loader_lang.Operation.OP_MULTIPLICATION
+				op = operator_type.OP_MULTIPLICATION
 			tk_type.SLASH:
-				op = loader_lang.Operation.OP_DIVISION
+				op = operator_type.OP_DIVISION
 			tk_type.PERCENT:
-				op = loader_lang.Operation.OP_MODULO
+				op = operator_type.OP_MODULO
 			_:
 				make_error('couldnt match operation :/ %s' % op_t.get_name())
-				op = loader_lang.Operation.OP_MODULO
+				op = operator_type.OP_MODULO
 		left = AST.assignment.new(left,op,right)
 	return left
 
@@ -568,7 +568,7 @@ func parse_unary() -> AST.Expr:
 	if check(tk_type.MINUS,peek()) || check(tk_type.NOT,peek()):
 		var op_t = advance()
 		var operand = parse_unary()
-		var op = AST.unary.Operation.OP_NEGATIVE if check(tk_type.MINUS,op_t) else AST.unary.Operation.OP_NOT 
+		var op = operator_type.OP_NEGATIVE if check(tk_type.MINUS,op_t) else operator_type.OP_NOT 
 		return AST.unary.new(operand,op)
 	return parse_call()
 

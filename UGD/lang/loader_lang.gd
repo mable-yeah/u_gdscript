@@ -1,11 +1,9 @@
 class_name loader_lang ##extra language enums/functions that dont belong to any specific loader resource
 
 
-
-
-
-
 enum Operation {
+	OP_NEGATIVE,
+	OP_NOT,
 	OP_ADDITION,
 	OP_SUBTRACTION,
 	OP_MULTIPLICATION,

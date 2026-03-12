@@ -15,3 +15,6 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	self.extends_n = p_ast.extends_n
 	self.globals = p_ast.globals
 	self.functions = p_ast.functions
+	
+	for global in globals:
+		print(global.accept())

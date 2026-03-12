@@ -3,8 +3,9 @@ class_name AST ##contains classes needed to form expression tree's
 #jane 'jumpy jane' remover save me !!
 
 
-##base expression classs, all expressions extend this
-class Expr:
+##base expression class, all expressions extend this
+@abstract class Expr:
+	var reduced_value:Variant = null
 	var _tk_st:String = "NONE"
 	var type:loader_lang.Type = loader_lang.Type.NONE:
 		set(p_type):
@@ -19,19 +20,21 @@ class Expr:
 	func get_type_name() -> String:
 		return loader_lang.Type.keys()[type]
 	
+	var visitor = ASTVisitor
+	@abstract func accept()
 
-
-class variable extends Expr: ##variable name reference 'x'
+##basic variable name reference
+class variable extends Expr: 
 	var name:String = ''
 	
 	func _init(p_name:String) -> void:
 		name = p_name
 		type = loader_lang.Type.IDENTIFIER
-		
+	
+	func accept():
+		return visitor.visit_variable(self)
 
-
-##passing in the value 'true' should infer the type of 'bool',
-##i.e passing in the string "true" should infer 'string' 
+##basic literal
 class literal extends Expr:
 	var literal_type:Variant.Type = Variant.Type.TYPE_NIL
 	var variant:Variant = null
@@ -42,7 +45,8 @@ class literal extends Expr:
 		literal_type = typeof(p_variant) as Variant.Type
 		type = loader_lang.Type.LITERAL
 	
-
+	func accept():
+		return visitor.visit_literal(self)
 
 
 ##'target(argument)'
@@ -54,7 +58,9 @@ class function_call extends Expr:
 		type = loader_lang.Type.FUNC_CALL
 		target = p_target
 		args = arguments
-	
+
+	func accept():
+		return visitor.visit_function_call(self)
 
 ##'target.function'
 class member_Call extends Expr: 
@@ -65,20 +71,21 @@ class member_Call extends Expr:
 		type = loader_lang.Type.MEMBER_CALL
 		target = p_target
 		member = arg
-	
 
-
+	func accept():
+		return visitor.visit_member_call(self)
 
 
 ##enum foo {bar,fungus = 1}
-class _enum extends Expr: 
+class enumerator extends Expr: 
 	var enumerators:Array[Dictionary] = []
 	
 	func _init(p_enum:Array[Dictionary]) -> void:
 		type = loader_lang.Type.ENUM
 		enumerators = p_enum
 	
-
+	func accept():
+		return visitor.visit_enum(self)
 
 ##arr[expression]
 class index extends Expr: 
@@ -90,7 +97,8 @@ class index extends Expr:
 		target = p_target 
 		idx = p_ind
 	
-
+	func accept():
+		return visitor.visit_index(self)
 
 
 ##exp1 +/=/> expr2
@@ -104,20 +112,22 @@ class assignment extends Expr:
 		left = LEFT
 		op = OP
 		right = RIGHT
-
+	
+	func accept():
+		return visitor.visit_assignment(self)
 
 ##-(1 - 1) || !(1 - 1)
 class unary extends Expr:
-	enum Operation {OP_NEGATIVE,OP_NOT}
-	
-	var op:Operation
+	var op:loader_lang.Operation #OP_NEGATIVE or OP_NOT
 	var operand:Expr
 	
-	func _init(p_operand:Expr,OP:Operation) -> void:
+	func _init(p_operand:Expr,OP:loader_lang.Operation) -> void:
 		type = loader_lang.Type.UNARY_OPERATOR
 		op = OP
 		operand = p_operand
-
+	
+	func accept():
+		return visitor.visit_unary(self)
 
 
 ##[value1,value2]
@@ -127,8 +137,11 @@ class array extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.ARRAY
 
+	
+	func accept():
+		return visitor.visit_array(self)
 
-##{0 = 'string'} || {0 : 'not_string'}
+##{0 = 'string'} || {0 : true}
 class dictionary extends Expr:
 	enum styling {
 		NONE,
@@ -139,7 +152,7 @@ class dictionary extends Expr:
 	var style:styling = styling.NONE
 	var elements:Dictionary = {}
 	
-	func decide_style(EQUAL:bool,COLON:bool):
+	func decide_style(EQUAL:bool,COLON:bool): #called inside of the preparser
 		if style != styling.NONE:
 			return 
 		if EQUAL:
@@ -149,12 +162,14 @@ class dictionary extends Expr:
 
 	func _init() -> void:
 		type = loader_lang.Type.DICTIONARY
-
+	
+	func accept():
+		return visitor.visit_dictionary(self)
 
 ##x if z else y
 class ternary extends Expr:
 	var target:Expr #x
-	var left:Expr #if z else
+	var left:Expr #z
 	var right:Expr #y
 	#x if bool_here else y
 	
@@ -164,12 +179,14 @@ class ternary extends Expr:
 		left = p_left
 		right = p_right
 	
-
+	
+	func accept():
+		return visitor.visit_ternary(self)
 
 
 #STATEMENT EXPR
 
-##func statement() -> hint:body
+##func statement() (-> hint?) : body
 class funcDecl_Statement extends Expr:
 	var name = ""
 	var type_hint:TOKENS.token # -> (TYPE)
@@ -179,6 +196,9 @@ class funcDecl_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.FUNCTION
 
+	
+	func accept():
+		return visitor.visit_func_decl(self)
 
 ##(const?) var = expression
 class varDecl_Statement extends Expr:
@@ -194,24 +214,32 @@ class varDecl_Statement extends Expr:
 		initializer = p_initializer
 		is_constant = p_is_constant
 
-
+	
+	func accept():
+		return visitor.visit_var_decl(self)
 class pass_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.PASS
 
-
+	
+	func accept():
+		return visitor.visit_pass(self)
 
 class cont_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.CONTINUE
 
+	
+	func accept():
+		return visitor.visit_continue(self)
 
 class break_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.BREAK
 
-
-
+	
+	func accept():
+		return visitor.visit_break(self)
 
 class expression_Statement extends Expr:
 	var expression:Expr
@@ -220,17 +248,18 @@ class expression_Statement extends Expr:
 		type = loader_lang.Type.EXPRESSION
 		expression = p_expr
 
-
-
+	
+	func accept():
+		return visitor.visit_expression(self)
 
 class return_Statement extends Expr:
 	var expression:Expr = null
 	func _init(p_expr:Expr = null) -> void:
 		type = loader_lang.Type.RETURN
 		expression = p_expr
-	
-
-
+		
+	func accept():
+		return visitor.visit_return(self)
 
 ##for x in iter: body
 class for_Statement extends Expr:
@@ -244,7 +273,9 @@ class for_Statement extends Expr:
 		name = p_name
 		body = p_body
 		iter = p_iter
-
+	
+	func accept():
+		return visitor.visit_for(self)
 
 ##while condition: body
 class while_Statement extends Expr:
@@ -255,7 +286,9 @@ class while_Statement extends Expr:
 		type = loader_lang.Type.WHILE
 		condition = p_condition
 		body = p_body
-
+	
+	func accept():
+		return visitor.visit_while(self)
 
 ##if condition: then_body else: else_body
 class if_Statement extends Expr:
@@ -269,6 +302,8 @@ class if_Statement extends Expr:
 		_then = p_then
 		_else = p_else
 
+	func accept():
+		return visitor.visit_if(self)
 
 
 ##container for the whole program
