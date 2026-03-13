@@ -106,47 +106,51 @@ static func get_builtin_type(st_type:String) -> Variant.Type:
 static func scrub_comments_GD(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
 	for i in code_packed.size():
-		var line = code_packed[i]
-		var line_length = line.length()
-		var comment_idx = -1
-		var comment_special = line.find('##')
-		var comment = line.find('#')
-		if comment_special > -1:
-			comment_idx = comment_special
-		elif comment > -1:
-			comment_idx = comment
+		var line:String = code_packed[i]
+		var line_length:int = line.length()
+		var comment_special:int  = line.find('##')
+		var comment:int = line.find('#')
+		var comment_idx:int = comment_special if comment > comment_special else comment
+		if comment_special == -1 and comment == -1: comment_idx = -1
+		if comment_special == -1 and comment != -1: comment_idx = comment
+		if comment_special != -1 and comment == -1: comment_idx = comment_special
 		
 		if comment_idx > -1:
 			line = line.erase(comment_idx,line_length)
 			code_packed[i] = line
+	
 	return "\n".join(code_packed)
 
 ##scrubs C++ style comments, '/*','*/', '//'
 static func scrub_comments_C(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)
-	var comment_block = -1
-	for i in code_packed.size():
-		var line = code_packed[i]
-		var line_length = line.length()
-		var comment_idx = -1
-		var comment_block_start = line.find('/*')
-		var comment_block_end = line.find('*/')
-		var comment = line.find('//')
-		if comment_block_start > -1:
-			comment_block += 1
-			printt(comment_block_start,comment_block_end)
-			comment_idx = comment_block_start
-		if comment_block_end > -1:
-			comment_block -= 1
-		if comment > -1:
-			comment_idx = comment
-		if comment_idx > -1 || comment_block > -1:
+	
+	var block_started := false
+	for i in code_packed.size(): #handles comment blocks
+		var line:String = code_packed[i]
+		var line_length:int = line.length()
+		var block_st:int = line.find('/*')
+		var block_end:int = line.find('*/')
+		if block_st > -1: block_started = true
+		if block_started:
+			var length = line_length if block_end == -1 else block_end + 1
+			line = line.erase(block_st if block_st != -1 else 0,length)
+		if block_end > -1: block_started = false
+		code_packed[i] = line
+	
+	for i in code_packed.size(): #handles single line comments
+		var line:String = code_packed[i]
+		var line_length:int = line.length()
+		var comment_idx:int = line.find('//')
+		if comment_idx > -1:
 			line = line.erase(comment_idx,line_length)
 			code_packed[i] = line
-		
-	if comment_block != -1:
-		printerr('uncapped C++ style comment block')
 	return "\n".join(code_packed)
+
+
+
+
+
 
 
 ##scrubs whitespace from code
