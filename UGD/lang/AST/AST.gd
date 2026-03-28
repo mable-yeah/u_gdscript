@@ -5,6 +5,8 @@ class_name AST ##contains classes needed to form expression tree's
 
 ##base expression class, all expressions extend this
 @abstract class Expr:
+	var is_valid:bool = false
+	
 	var reduced_value:Variant = null
 	var _tk_st:String = "NONE"
 	var type:loader_lang.Type = loader_lang.Type.NONE:
@@ -20,8 +22,10 @@ class_name AST ##contains classes needed to form expression tree's
 	func get_type_name() -> String:
 		return loader_lang.Type.keys()[type]
 	
-	var visitor = ASTVisitor
-	@abstract func accept()
+	var visitor = AST_visitor
+	
+	
+	@abstract func accept() -> String
 
 ##basic variable name reference
 class variable extends Expr: 
@@ -33,6 +37,8 @@ class variable extends Expr:
 	
 	func accept():
 		return visitor.visit_variable(self)
+	
+	
 
 ##basic literal
 class literal extends Expr:

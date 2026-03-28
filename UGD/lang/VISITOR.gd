@@ -1,9 +1,13 @@
-class_name ASTVisitor
-##this class handles basic code generation, it doesnt handle errors or type checks just strings
+class_name AST_visitor
+##this class handles basic code generation 
+##all AST expressions except the base class should contain an accept function that leads here
+##in turn all of these functions should be static and return a string of theoretically formatted/usable code
 
 const err = 'statement type "%s" doesnt have a valid visit function / returns null'
 
-static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true):
+
+
+static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true) -> String:
 	var type_hint = lang_utilities.get_type_hint(stmt.type_hint)
 	var initializer = '%s' % stmt.initializer.accept() if stmt.initializer != null else ''
 	if !needs_body: return initializer
@@ -13,7 +17,7 @@ static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true):
 	if type_hint != '': value = ':%s%s' % [type_hint,value]
 	return '%svar %s%s' %  [constant,stmt.name,value]
 
-static func visit_func_decl(stmt:AST.funcDecl_Statement):
+static func visit_func_decl(stmt:AST.funcDecl_Statement) -> String:
 	var body:PackedStringArray = parse_body(stmt.body)
 	var parameters:PackedStringArray
 	for p_name in stmt.params:
@@ -25,10 +29,10 @@ static func visit_func_decl(stmt:AST.funcDecl_Statement):
 	var colon = ':' if stmt.type_hint == null else ' -> %s:' % lang_utilities.get_type_hint(stmt.type_hint)
 	return 'func %s(%s)%s%s' %[stmt.name,','.join(parameters),colon,join_body(body)]
 
-static func visit_variable(expr:AST.variable):
+static func visit_variable(expr:AST.variable) -> String:
 	return str(expr.name)
 
-static func visit_literal(expr:AST.literal): 
+static func visit_literal(expr:AST.literal) -> String: 
 	match typeof(expr.variant):
 		TYPE_NIL:
 			expr.variant = 'null'
@@ -37,43 +41,43 @@ static func visit_literal(expr:AST.literal):
 			expr.variant = '%s%s%s' % [st_wrapper,expr.variant,st_wrapper]
 	return str(expr.variant)
 
-static func visit_function_call(expr:AST.function_call):
+static func visit_function_call(expr:AST.function_call) -> String:
 	var packed = parse_body(expr.args)
 	return '%s(%s)' % [expr.target.accept(),','.join(packed)]
 
-static func visit_member_call(expr:AST.member_Call): 
+static func visit_member_call(expr:AST.member_Call) -> String: 
 	return '%s.%s' % [expr.target.accept(),expr.member.accept()]
 
-static func visit_index(expr:AST.index):
+static func visit_index(expr:AST.index) -> String:
 	return '%s[%s]' % [expr.target.accept(),expr.idx.accept()]
 
-static func visit_assignment(expr:AST.assignment):
+static func visit_assignment(expr:AST.assignment) -> String:
 	return '(%s %s %s)' % [expr.left.accept(),lang_utilities.get_op_st(expr.op),expr.right.accept()]
 
-static func visit_expression(stmt:AST.expression_Statement):
+static func visit_expression(stmt:AST.expression_Statement) -> String:
 	return stmt.expression.accept()
 
-static func visit_unary(expr:AST.unary):
+static func visit_unary(expr:AST.unary) -> String:
 	var op = 'not ' if expr.op == loader_lang.Operation.OP_NOT else '!'
 	return '%s%s' % [op,expr.operand.accept()]
 
-static func visit_ternary(expr:AST.ternary): 
+static func visit_ternary(expr:AST.ternary) -> String: 
 	return '%s if %s else %s' %[expr.target.accept(),expr.left.accept(),expr.right.accept()]
 
-static func visit_array(expr:AST.array): 
+static func visit_array(expr:AST.array) -> String: 
 	var packed:PackedStringArray
 	for member in expr.elements:
 		packed.append(member.accept())
 	return '[%s]' % ','.join(packed)
 
-static func visit_dictionary(expr:AST.dictionary):
+static func visit_dictionary(expr:AST.dictionary) -> String:
 	var dict:PackedStringArray = []
 	var dict_ch = ':' if expr.style == expr.styling.LUA_TABLE else '='
 	for element in expr.elements:
 		dict.append('%s %s %s' % [element.accept(),dict_ch,expr.elements[element].accept()])
 	return '{%s}' % ','.join(dict)
 
-static func visit_enum(expr:AST.enumerator):
+static func visit_enum(expr:AST.enumerator) -> String:
 	var pairs:PackedStringArray = []
 	for enumerator in expr.enumerators: 
 		#enum values cannot be expressions or expr strings; so i dont need to .accept them :D
@@ -84,30 +88,30 @@ static func visit_enum(expr:AST.enumerator):
 
 #technicawwy doing it this way causes elifs to decondense into if else but it SHOULDNT effect much
 #since this is internal code
-static func visit_if(stmt:AST.if_Statement): 
+static func visit_if(stmt:AST.if_Statement) -> String: 
 	var body = parse_body(stmt._then)
 	var else_body = parse_body(stmt._else)
 	var stmt_else = '\n\t/d else:%s' % join_body(else_body) if !stmt._else.is_empty() else ''
 	return 'if %s:%s' % [stmt.condition.accept(),join_body(body)] + stmt_else
 
-static func visit_for(stmt:AST.for_Statement): 
+static func visit_for(stmt:AST.for_Statement) -> String: 
 	var body = parse_body(stmt.body)
 	return 'for %s in %s:%s' % [stmt.name,stmt.iter.accept(),join_body(body)]
 
-static func visit_while(stmt:AST.while_Statement):
+static func visit_while(stmt:AST.while_Statement) -> String:
 	var body = parse_body(stmt.body)
 	return 'while %s:%s' % [stmt.condition.accept(),join_body(body)]
 
-static func visit_break(_stmt:AST.break_Statement): 
+static func visit_break(_stmt:AST.break_Statement) -> String: 
 	return 'break'
 
-static func visit_continue(_stmt:AST.cont_Statement): 
+static func visit_continue(_stmt:AST.cont_Statement) -> String: 
 	return 'continue'
 
-static func visit_pass(_stmt:AST.pass_Statement): 
+static func visit_pass(_stmt:AST.pass_Statement) -> String: 
 	return 'pass'
 
-static func visit_return(stmt:AST.return_Statement):
+static func visit_return(stmt:AST.return_Statement) -> String:
 	return 'return %s' % stmt.expression.accept() if stmt.expression != null else ''
 
 ##parses an array of expressions into a PackedStringArray
@@ -133,7 +137,7 @@ static func increase_tabs(st:String) -> String:
 	for x in lines.size():
 		var line:String = lines[x]
 		
-		if line.count('/d') > 0: #skip a new indent when needed
+		if line.count('/d') > 0: #/d skips increasing indent when needed
 			var t = line.count('\t')
 			line = line.strip_edges()
 			if line.begins_with('/d'):

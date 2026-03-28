@@ -41,9 +41,6 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 		_: printerr('could not find operation at index %s' % op) ; return ''
 
 
-
-
-
 ##return a basic list of script method names
 static func get_methods(value:Object) -> Array[String]:
 	var method_n_list:Array[String] = []
