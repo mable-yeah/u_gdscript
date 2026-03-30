@@ -20,13 +20,17 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	pack_code()
 
 
+
+
+
+
 func pack_code():
 	var packed:PackedStringArray = []
 	var class_st = 'class_name %s' % class_n
 	if class_n != '':  packed.append(class_st)
 	if contains_data():
 		for expression in globals + misc + functions:
-			packed.append(expression.accept())
+			packed.append(expression.get_code())
 	
 	print('\n'.join(packed))
 	return '\n'.join(packed)

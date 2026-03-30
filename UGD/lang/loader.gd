@@ -1,18 +1,5 @@
 class_name script_loader
 
-#TODO
-#-add script loader hints through ::HINT_NAME
-#ideally this would be through the tokenizer/lexer i.e before any other operations happen
-#
-#-move cursors/checks/peeks into their own classes that way both preprocessor and lexer can inherit from
-#the same code that is written twice currently 
-#(bonus points if i can make that work through the @abstract class stuff )
-
-#-add error lines in the code i.e 'INVALID_THING <--  at line %s column %s'
-
-
-var DB = ClassDB
-
 var source_code:String
 
 var program_ast:AST.PROGRAM

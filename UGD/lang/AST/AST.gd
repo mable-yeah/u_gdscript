@@ -22,10 +22,10 @@ class_name AST ##contains classes needed to form expression tree's
 	func get_type_name() -> String:
 		return loader_lang.Type.keys()[type]
 	
-	var visitor = AST_visitor
+	var codegen = AST_codegen
 	
 	
-	@abstract func accept() -> String
+	@abstract func get_code() -> String
 
 ##basic variable name reference
 class variable extends Expr: 
@@ -35,8 +35,8 @@ class variable extends Expr:
 		name = p_name
 		type = loader_lang.Type.IDENTIFIER
 	
-	func accept():
-		return visitor.visit_variable(self)
+	func get_code():
+		return codegen.visit_variable(self)
 	
 	
 
@@ -51,8 +51,8 @@ class literal extends Expr:
 		literal_type = typeof(p_variant) as Variant.Type
 		type = loader_lang.Type.LITERAL
 	
-	func accept():
-		return visitor.visit_literal(self)
+	func get_code():
+		return codegen.visit_literal(self)
 
 
 ##'target(argument)'
@@ -65,8 +65,8 @@ class function_call extends Expr:
 		target = p_target
 		args = arguments
 
-	func accept():
-		return visitor.visit_function_call(self)
+	func get_code():
+		return codegen.visit_function_call(self)
 
 ##'target.function'
 class member_Call extends Expr: 
@@ -78,8 +78,8 @@ class member_Call extends Expr:
 		target = p_target
 		member = arg
 
-	func accept():
-		return visitor.visit_member_call(self)
+	func get_code():
+		return codegen.visit_member_call(self)
 
 
 ##enum foo {bar,fungus = 1}
@@ -92,8 +92,8 @@ class enumerator extends Expr:
 		enumerators = p_enum
 		name = p_name
 	
-	func accept():
-		return visitor.visit_enum(self)
+	func get_code():
+		return codegen.visit_enum(self)
 
 ##arr[expression]
 class index extends Expr: 
@@ -105,8 +105,8 @@ class index extends Expr:
 		target = p_target 
 		idx = p_ind
 	
-	func accept():
-		return visitor.visit_index(self)
+	func get_code():
+		return codegen.visit_index(self)
 
 
 ##exp1 +/=/> expr2
@@ -121,8 +121,8 @@ class assignment extends Expr:
 		op = OP
 		right = RIGHT
 	
-	func accept():
-		return visitor.visit_assignment(self)
+	func get_code():
+		return codegen.visit_assignment(self)
 
 ##-(1 - 1) || !(1 - 1)
 class unary extends Expr:
@@ -134,8 +134,8 @@ class unary extends Expr:
 		op = OP
 		operand = p_operand
 	
-	func accept():
-		return visitor.visit_unary(self)
+	func get_code():
+		return codegen.visit_unary(self)
 
 
 ##[value1,value2]
@@ -146,8 +146,8 @@ class array extends Expr:
 		type = loader_lang.Type.ARRAY
 
 	
-	func accept():
-		return visitor.visit_array(self)
+	func get_code():
+		return codegen.visit_array(self)
 
 ##{0 = 'string'} || {0 : true}
 class dictionary extends Expr:
@@ -171,8 +171,8 @@ class dictionary extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.DICTIONARY
 	
-	func accept():
-		return visitor.visit_dictionary(self)
+	func get_code():
+		return codegen.visit_dictionary(self)
 
 ##x if z else y
 class ternary extends Expr:
@@ -188,8 +188,8 @@ class ternary extends Expr:
 		right = p_right
 	
 	
-	func accept():
-		return visitor.visit_ternary(self)
+	func get_code():
+		return codegen.visit_ternary(self)
 
 
 #STATEMENT EXPR
@@ -205,8 +205,8 @@ class funcDecl_Statement extends Expr:
 		type = loader_lang.Type.FUNCTION
 
 	
-	func accept():
-		return visitor.visit_func_decl(self)
+	func get_code():
+		return codegen.visit_func_decl(self)
 
 ##(const?) var = expression
 class varDecl_Statement extends Expr:
@@ -223,31 +223,31 @@ class varDecl_Statement extends Expr:
 		is_constant = p_is_constant
 
 	
-	func accept(needs_body := true):
-		return visitor.visit_var_decl(self,needs_body)
+	func get_code(needs_body := true):
+		return codegen.visit_var_decl(self,needs_body)
 class pass_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.PASS
 
 	
-	func accept():
-		return visitor.visit_pass(self)
+	func get_code():
+		return codegen.visit_pass(self)
 
 class cont_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.CONTINUE
 
 	
-	func accept():
-		return visitor.visit_continue(self)
+	func get_code():
+		return codegen.visit_continue(self)
 
 class break_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.BREAK
 
 	
-	func accept():
-		return visitor.visit_break(self)
+	func get_code():
+		return codegen.visit_break(self)
 
 class expression_Statement extends Expr:
 	var expression:Expr
@@ -257,8 +257,8 @@ class expression_Statement extends Expr:
 		expression = p_expr
 
 	
-	func accept():
-		return visitor.visit_expression(self)
+	func get_code():
+		return codegen.visit_expression(self)
 
 class return_Statement extends Expr:
 	var expression:Expr = null
@@ -266,8 +266,8 @@ class return_Statement extends Expr:
 		type = loader_lang.Type.RETURN
 		expression = p_expr
 		
-	func accept():
-		return visitor.visit_return(self)
+	func get_code():
+		return codegen.visit_return(self)
 
 ##for x in iter: body
 class for_Statement extends Expr:
@@ -282,8 +282,8 @@ class for_Statement extends Expr:
 		body = p_body
 		iter = p_iter
 	
-	func accept():
-		return visitor.visit_for(self)
+	func get_code():
+		return codegen.visit_for(self)
 
 ##while condition: body
 class while_Statement extends Expr:
@@ -295,8 +295,8 @@ class while_Statement extends Expr:
 		condition = p_condition
 		body = p_body
 	
-	func accept():
-		return visitor.visit_while(self)
+	func get_code():
+		return codegen.visit_while(self)
 
 ##if condition: then_body else: else_body
 class if_Statement extends Expr:
@@ -310,8 +310,8 @@ class if_Statement extends Expr:
 		_then = p_then
 		_else = p_else
 
-	func accept():
-		return visitor.visit_if(self)
+	func get_code():
+		return codegen.visit_if(self)
 
 
 ##container for the whole program
@@ -330,3 +330,31 @@ class PROGRAM:
 	##returns if functions/variables are declared yet / used for header stuff
 	func contains_data():
 		return globals.size() + functions.size() + misc.size() > 0
+
+
+
+
+
+
+#AST.Expr
+#AST.array
+#AST.assignment
+#AST.break_Statement
+#AST.cont_Statement
+#AST.dictionary
+#AST.enumerator
+#AST.expression_Statement
+#AST.for_Statement
+#AST.funcDecl_Statement
+#AST.function_call
+#AST.if_Statement
+#AST.index
+#AST.literal
+#AST.member_Call
+#AST.pass_Statement
+#AST.return_Statement
+#AST.ternary
+#AST.unary
+#AST.varDecl_Statement
+#AST.variable
+#AST.while_Statement

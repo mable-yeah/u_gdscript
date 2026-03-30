@@ -1,4 +1,4 @@
-class_name AST_visitor
+class_name AST_codegen
 ##this class handles basic code generation 
 ##all AST expressions except the base class should contain an accept function that leads here
 ##in turn all of these functions should be static and return a string of theoretically formatted/usable code
@@ -9,7 +9,7 @@ const err = 'statement type "%s" doesnt have a valid visit function / returns nu
 
 static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true) -> String:
 	var type_hint = lang_utilities.get_type_hint(stmt.type_hint)
-	var initializer = '%s' % stmt.initializer.accept() if stmt.initializer != null else ''
+	var initializer = '%s' % stmt.initializer.get_code() if stmt.initializer != null else ''
 	if !needs_body: return initializer
 	
 	var constant = 'const ' if stmt.is_constant else ''
@@ -43,38 +43,38 @@ static func visit_literal(expr:AST.literal) -> String:
 
 static func visit_function_call(expr:AST.function_call) -> String:
 	var packed = parse_body(expr.args)
-	return '%s(%s)' % [expr.target.accept(),','.join(packed)]
+	return '%s(%s)' % [expr.target.get_code(),','.join(packed)]
 
 static func visit_member_call(expr:AST.member_Call) -> String: 
-	return '%s.%s' % [expr.target.accept(),expr.member.accept()]
+	return '%s.%s' % [expr.target.get_code(),expr.member.get_code()]
 
 static func visit_index(expr:AST.index) -> String:
-	return '%s[%s]' % [expr.target.accept(),expr.idx.accept()]
+	return '%s[%s]' % [expr.target.get_code(),expr.idx.get_code()]
 
 static func visit_assignment(expr:AST.assignment) -> String:
-	return '(%s %s %s)' % [expr.left.accept(),lang_utilities.get_op_st(expr.op),expr.right.accept()]
+	return '(%s %s %s)' % [expr.left.get_code(),lang_utilities.get_op_st(expr.op),expr.right.get_code()]
 
 static func visit_expression(stmt:AST.expression_Statement) -> String:
-	return stmt.expression.accept()
+	return stmt.expression.get_code()
 
 static func visit_unary(expr:AST.unary) -> String:
 	var op = 'not ' if expr.op == loader_lang.Operation.OP_NOT else '!'
-	return '%s%s' % [op,expr.operand.accept()]
+	return '%s%s' % [op,expr.operand.get_code()]
 
 static func visit_ternary(expr:AST.ternary) -> String: 
-	return '%s if %s else %s' %[expr.target.accept(),expr.left.accept(),expr.right.accept()]
+	return '%s if %s else %s' %[expr.target.get_code(),expr.left.get_code(),expr.right.get_code()]
 
 static func visit_array(expr:AST.array) -> String: 
 	var packed:PackedStringArray
 	for member in expr.elements:
-		packed.append(member.accept())
+		packed.append(member.get_code())
 	return '[%s]' % ','.join(packed)
 
 static func visit_dictionary(expr:AST.dictionary) -> String:
 	var dict:PackedStringArray = []
 	var dict_ch = ':' if expr.style == expr.styling.LUA_TABLE else '='
 	for element in expr.elements:
-		dict.append('%s %s %s' % [element.accept(),dict_ch,expr.elements[element].accept()])
+		dict.append('%s %s %s' % [element.get_code(),dict_ch,expr.elements[element].get_code()])
 	return '{%s}' % ','.join(dict)
 
 static func visit_enum(expr:AST.enumerator) -> String:
@@ -92,15 +92,15 @@ static func visit_if(stmt:AST.if_Statement) -> String:
 	var body = parse_body(stmt._then)
 	var else_body = parse_body(stmt._else)
 	var stmt_else = '\n\t/d else:%s' % join_body(else_body) if !stmt._else.is_empty() else ''
-	return 'if %s:%s' % [stmt.condition.accept(),join_body(body)] + stmt_else
+	return 'if %s:%s' % [stmt.condition.get_code(),join_body(body)] + stmt_else
 
 static func visit_for(stmt:AST.for_Statement) -> String: 
 	var body = parse_body(stmt.body)
-	return 'for %s in %s:%s' % [stmt.name,stmt.iter.accept(),join_body(body)]
+	return 'for %s in %s:%s' % [stmt.name,stmt.iter.get_code(),join_body(body)]
 
 static func visit_while(stmt:AST.while_Statement) -> String:
 	var body = parse_body(stmt.body)
-	return 'while %s:%s' % [stmt.condition.accept(),join_body(body)]
+	return 'while %s:%s' % [stmt.condition.get_code(),join_body(body)]
 
 static func visit_break(_stmt:AST.break_Statement) -> String: 
 	return 'break'
@@ -112,14 +112,14 @@ static func visit_pass(_stmt:AST.pass_Statement) -> String:
 	return 'pass'
 
 static func visit_return(stmt:AST.return_Statement) -> String:
-	return 'return %s' % stmt.expression.accept() if stmt.expression != null else ''
+	return 'return %s' % stmt.expression.get_code() if stmt.expression != null else ''
 
 ##parses an array of expressions into a PackedStringArray
 static func parse_body(body:Array[AST.Expr]) -> PackedStringArray:
 	if body.is_empty():return []
 	var body_packed:PackedStringArray
 	for expression in body:
-		var visit = expression.accept()
+		var visit = expression.get_code()
 		if visit != null:
 			body_packed.append(visit) ; continue
 	return body_packed
