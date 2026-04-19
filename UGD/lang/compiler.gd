@@ -39,14 +39,18 @@ func def_variable(name:String,type := 'variant'):
 	if shadows_declared(name): make_error(errors.shadows % [type,name])
 	current_scope[name] = false
 
-func shadows_declared(name:String,p_scope:Dictionary = current_scope.duplicate()) -> bool:
+func shadows_declared(name:String) -> bool:
 	var declared = is_declared(name)
 	if lang_utilities.is_class_or_type(name): return true
 	return declared
 
-func is_declared(name:String,p_scope = current_scope.duplicate()) -> bool:
-	p_scope.merge(scope[0])
-	return p_scope.has(name)
+func is_declared(name:String) -> bool:
+	for i in range(current_scope_idx, -1, -1):
+		if scope[i].has(name): return true
+	return false
+
+func is_assignable(expr) -> bool:
+	return expr is AST.variable or expr is AST.member_Call or expr is AST.index
 
 
 func visit_var_decl(stmt:AST.varDecl_Statement):
@@ -74,42 +78,56 @@ func visit_enum(expr:AST.enumerator):
 
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): return 
-	make_error('variable reference does not exist "%s"' % expr.name)
+	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 
-func visit_literal(expr:AST.literal):
+func visit_literal(_expr:AST.literal): #literals contain no expr's
 	pass 
 
 func visit_function_call(expr:AST.function_call):
-	pass
+	expr.target.visit(self)
+	for arg in expr.args:
+		arg.visit(self)
+	
 
 func visit_member_call(expr:AST.member_Call):
-	pass 
+	expr.target.visit(self)
+	expr.member.visit(self)
 
 func visit_index(expr:AST.index):
-	pass
+	expr.target.visit(self)
+	expr.idx.visit(self)
 
 
 func visit_assignment(expr:AST.assignment):
-	if expr.op == loader_lang.Operation.OP_COMP_EQUAL: return
+	if expr.op == loader_lang.Operation.OP_COMP_EQUAL:
+		return
+	
+	if !is_assignable(expr.left):
+		make_error(errors.assign %[expr.left._tk_st,expr.right._tk_st])
+	
+	expr.left.visit(self) ; expr.right.visit(self)
 
 func visit_expression(stmt:AST.expression_Statement):
-	pass
+	stmt.expression.visit(self)
 
 func visit_unary(expr:AST.unary):
-	pass
+	expr.operand.visit(self)
 
 func visit_ternary(expr:AST.ternary):
-	pass 
+	expr.target.visit(self) 
+	expr.left.visit(self) 
+	expr.right.visit(self) 
 
 func visit_array(expr:AST.array):
-	pass 
+	for element in expr.elements:
+		element.visit(self) 
 
 func visit_dictionary(expr:AST.dictionary):
-	pass
+	for element in expr.elements.values():
+		element.visit(self)
 
 func visit_if(stmt:AST.if_Statement):
 	stmt.condition.visit(self) 
-	
 	def_scope()
 	for expression in stmt._then:expression.visit(self)
 	leave_scope()
@@ -145,7 +163,7 @@ func visit_pass(_stmt:AST.pass_Statement):
 func visit_return(stmt:AST.return_Statement):
 	if stmt.expression != null: stmt.expression.visit(self)
 
-func visit_code(): 
+func visit_code():
 	if !contains_data(): return
 	for expression in (globals + misc + functions):
 		expression.visit(self) #visit calls one of the cooresponding functions here

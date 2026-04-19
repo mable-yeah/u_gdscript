@@ -182,7 +182,7 @@ class dictionary extends Expr:
 	}
 	
 	var style:styling = styling.NONE
-	var elements:Dictionary = {}
+	var elements:Dictionary[Variant,AST.Expr] = {}
 	
 	func decide_style(EQUAL:bool,COLON:bool): #called inside of the preparser
 		if style != styling.NONE:
