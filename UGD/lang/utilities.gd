@@ -145,11 +145,6 @@ static func scrub_comments_C(script_code:String) -> String:
 	return "\n".join(code_packed)
 
 
-
-
-
-
-
 ##scrubs whitespace from code
 static func scrub_whitespace(script_code:String) -> String:
 	var code_packed = script_code.split("\n",true)

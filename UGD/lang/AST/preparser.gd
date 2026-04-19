@@ -710,6 +710,5 @@ func parse_primary() -> AST.Expr:
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary, got %s')
 		return expr
 	
-
 	make_error('pre-processor error, expected expression :/, got %s ' % peek().get_name())
 	return null

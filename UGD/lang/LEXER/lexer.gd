@@ -44,7 +44,6 @@ var last_token:TOKENS.token = TOKENS.create_token()
 
 func _init(p_code,debug_print:bool = false) -> void:
 	code = lang_utilities.scrub_comments_GD(p_code)
-	
 	code = code.insert(0,'\n') + '\n' 
 	#since i cant directly manage the start and ending of the file
 	#both ends are represented by an extra new line

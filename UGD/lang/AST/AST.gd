@@ -2,11 +2,8 @@ class_name AST ##contains classes needed to form expression tree's
 
 #jane 'jumpy jane' remover save me !!
 
-
 ##base expression class, all expressions extend this
 @abstract class Expr:
-	var is_valid:bool = false
-	
 	var reduced_value:Variant = null
 	var _tk_st:String = "NONE"
 	var type:loader_lang.Type = loader_lang.Type.NONE:
@@ -24,8 +21,9 @@ class_name AST ##contains classes needed to form expression tree's
 	
 	var codegen = AST_codegen
 	
-	
 	@abstract func get_code() -> String
+	
+	@abstract func visit(p_compiler:compiler) -> void
 
 ##basic variable name reference
 class variable extends Expr: 
@@ -39,6 +37,8 @@ class variable extends Expr:
 		return codegen.visit_variable(self)
 	
 	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_variable(self)
 
 ##basic literal
 class literal extends Expr:
@@ -53,7 +53,9 @@ class literal extends Expr:
 	
 	func get_code():
 		return codegen.visit_literal(self)
-
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_literal(self)
 
 ##'target(argument)'
 class function_call extends Expr: 
@@ -67,6 +69,10 @@ class function_call extends Expr:
 
 	func get_code():
 		return codegen.visit_function_call(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_function_call(self)
+
 
 ##'target.function'
 class member_Call extends Expr: 
@@ -80,6 +86,9 @@ class member_Call extends Expr:
 
 	func get_code():
 		return codegen.visit_member_call(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_member_call(self)
 
 
 ##enum foo {bar,fungus = 1}
@@ -94,7 +103,10 @@ class enumerator extends Expr:
 	
 	func get_code():
 		return codegen.visit_enum(self)
-
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_enum(self)
+		
 ##arr[expression]
 class index extends Expr: 
 	var target:Expr
@@ -107,7 +119,9 @@ class index extends Expr:
 	
 	func get_code():
 		return codegen.visit_index(self)
-
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_index(self)
 
 ##exp1 +/=/> expr2
 class assignment extends Expr:
@@ -123,6 +137,10 @@ class assignment extends Expr:
 	
 	func get_code():
 		return codegen.visit_assignment(self)
+	
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_assignment(self)
 
 ##-(1 - 1) || !(1 - 1)
 class unary extends Expr:
@@ -136,7 +154,9 @@ class unary extends Expr:
 	
 	func get_code():
 		return codegen.visit_unary(self)
-
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_unary(self)
 
 ##[value1,value2]
 class array extends Expr:
@@ -148,6 +168,10 @@ class array extends Expr:
 	
 	func get_code():
 		return codegen.visit_array(self)
+	
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_array(self)
 
 ##{0 = 'string'} || {0 : true}
 class dictionary extends Expr:
@@ -173,6 +197,10 @@ class dictionary extends Expr:
 	
 	func get_code():
 		return codegen.visit_dictionary(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_dictionary(self)
+
 
 ##x if z else y
 class ternary extends Expr:
@@ -190,7 +218,10 @@ class ternary extends Expr:
 	
 	func get_code():
 		return codegen.visit_ternary(self)
-
+	
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_ternary(self)
 
 #STATEMENT EXPR
 
@@ -207,6 +238,9 @@ class funcDecl_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_func_decl(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_func_decl(self)
 
 ##(const?) var = expression
 class varDecl_Statement extends Expr:
@@ -225,6 +259,11 @@ class varDecl_Statement extends Expr:
 	
 	func get_code(needs_body := true):
 		return codegen.visit_var_decl(self,needs_body)
+	
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_var_decl(self)
+
 class pass_Statement extends Expr:
 	func _init() -> void:
 		type = loader_lang.Type.PASS
@@ -232,6 +271,10 @@ class pass_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_pass(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_pass(self)
+
 
 class cont_Statement extends Expr:
 	func _init() -> void:
@@ -240,6 +283,10 @@ class cont_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_continue(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_continue(self)
+
 
 class break_Statement extends Expr:
 	func _init() -> void:
@@ -248,6 +295,10 @@ class break_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_break(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_break(self)
+
 
 class expression_Statement extends Expr:
 	var expression:Expr
@@ -259,6 +310,10 @@ class expression_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_expression(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_expression(self)
+
 
 class return_Statement extends Expr:
 	var expression:Expr = null
@@ -268,6 +323,10 @@ class return_Statement extends Expr:
 		
 	func get_code():
 		return codegen.visit_return(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_return(self)
+
 
 ##for x in iter: body
 class for_Statement extends Expr:
@@ -284,6 +343,10 @@ class for_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_for(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_for(self)
+
 
 ##while condition: body
 class while_Statement extends Expr:
@@ -297,6 +360,11 @@ class while_Statement extends Expr:
 	
 	func get_code():
 		return codegen.visit_while(self)
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_while(self)
+
+
 
 ##if condition: then_body else: else_body
 class if_Statement extends Expr:
@@ -312,7 +380,9 @@ class if_Statement extends Expr:
 
 	func get_code():
 		return codegen.visit_if(self)
-
+	
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_if(self)
 
 ##container for the whole program
 class PROGRAM: 
@@ -336,25 +406,25 @@ class PROGRAM:
 
 
 
-#AST.Expr
-#AST.array
-#AST.assignment
-#AST.break_Statement
-#AST.cont_Statement
-#AST.dictionary
-#AST.enumerator
-#AST.expression_Statement
-#AST.for_Statement
-#AST.funcDecl_Statement
-#AST.function_call
-#AST.if_Statement
-#AST.index
-#AST.literal
-#AST.member_Call
-#AST.pass_Statement
-#AST.return_Statement
-#AST.ternary
-#AST.unary
-#AST.varDecl_Statement
-#AST.variable
-#AST.while_Statement
+#Expr
+#array
+#assignment
+#break_Statement
+#cont_Statement
+#dictionary
+#enumerator
+#expression_Statement
+#for_Statement
+#funcDecl_Statement
+#function_call
+#if_Statement
+#index
+#literal
+#member_Call
+#pass_Statement
+#return_Statement
+#ternary
+#unary
+#varDecl_Statement
+#variable
+#while_Statement

@@ -21,7 +21,7 @@ static func visit_func_decl(stmt:AST.funcDecl_Statement) -> String:
 	var body:PackedStringArray = parse_body(stmt.body)
 	var parameters:PackedStringArray
 	for p_name in stmt.params:
-		var value = stmt.params[p_name].accept(false)
+		var value = stmt.params[p_name].get_code(false)
 		if value != '':
 			p_name = '%s := %s' % [p_name,value]
 		parameters.append(p_name)
