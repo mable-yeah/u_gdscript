@@ -42,9 +42,11 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 
 
 ##return a basic list of script method names
-static func get_methods(value:Object) -> Array[String]:
+static func get_script_methods(value:Object) -> Array[String]:
 	var method_n_list:Array[String] = []
-	if value == null: return []
+	if value == null: 
+		printerr('invalid value in get_methods')
+		return []
 	var script:Script = value.get_script()
 	if script == null: return []
 	var properties_list = script.get_method_list()
@@ -55,9 +57,11 @@ static func get_methods(value:Object) -> Array[String]:
 
 
 ##return a basic list of script property names
-static func get_property_names(value:Object) -> Array[String]:
+static func get_script_property_names(value:Object) -> Array[String]:
 	var property_n_list:Array[String] = []
-	if value == null: return []
+	if value == null: 
+		printerr('invalid value in get_methods')
+		return []
 	var script:Script  = value.get_script()
 	if script == null: return []
 	var properties_list = script.get_script_property_list()
@@ -67,6 +71,7 @@ static func get_property_names(value:Object) -> Array[String]:
 			continue
 		property_n_list.append(n)
 	return property_n_list
+
 
 
 ##return's true if string matches a class type or builtin type

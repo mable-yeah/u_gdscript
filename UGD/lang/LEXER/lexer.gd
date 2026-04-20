@@ -524,7 +524,6 @@ func number():
 	
 	return make_literal(n_literal)
 
-
 ##returns a literal token with valid string data, else error
 func string():
 	if peek_char() == 'r' || peek_char() == '^' || peek_char() ==  '&':
@@ -532,7 +531,6 @@ func string():
 	
 	var quote_char := peek_char(-1)
 	if peek_char() == quote_char and peek_char(1) == quote_char:
-		#is_multiline = true
 		read_char()
 		read_char()
 	
@@ -542,10 +540,15 @@ func string():
 		if is_at_end():
 			return make_error("unterminated string")
 		var p := peek_char()
-		if p == quote_char:
+		
+		if p == '\\':
+			result += p ; read_char()
+			result += peek_char()
+		elif p == quote_char:
 			string_found = true
 		else:
 			result += p
+		
 		read_char()
 		if string_found:
 			break
@@ -556,7 +559,7 @@ func annotation():
 	if is_unicode_identifier_start(peek_char()):
 		read_char()
 	else:
-		return make_error('expected annotation identifier after @')
+		return make_error('expected annotation identifier after @, got %s' % peek_char())
 	
 	var start = cursor - 1
 	while is_unicode_identifier_continue(peek_char()):

@@ -1,13 +1,23 @@
 class_name compiler extends AST.PROGRAM
+##handles AST analysis and re-compiling code into gd script
 
-var has_errors := false
-var code:String = ''
 
 const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"'
 }
+
+var loop_depth = 0
+var scope:Array[Dictionary] = [{}]
+var current_scope_idx:int = 0
+var current_scope:Dictionary:
+	get(): return scope.get(current_scope_idx)
+
+
+var has_errors := false
+var code:String = ''
+
 
 func make_error(st:String) -> void:
 	has_errors = true
@@ -21,12 +31,9 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	self.functions = p_ast.functions
 	self.misc = p_ast.misc
 	visit_code()
-
-var loop_depth = 0
-var scope:Array[Dictionary] = [{}]
-var current_scope_idx:int = 0
-var current_scope:Dictionary:
-	get(): return scope.get(current_scope_idx)
+	if has_errors: return
+	code = pack_code()
+	print(code)
 
 
 func def_scope():
@@ -80,7 +87,7 @@ func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): return 
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 
-func visit_literal(_expr:AST.literal): #literals contain no expr's
+func visit_literal(_expr:AST.literal): #literals contain no embedded expr's
 	pass 
 
 func visit_function_call(expr:AST.function_call):
@@ -157,28 +164,34 @@ func visit_break(_stmt:AST.break_Statement):
 func visit_continue(_stmt:AST.cont_Statement):
 	if loop_depth == 0: make_error(errors.loop % 'continue') 
 
-func visit_pass(_stmt:AST.pass_Statement):
+func visit_pass(_stmt:AST.pass_Statement): 
 	pass
 
 func visit_return(stmt:AST.return_Statement):
 	if stmt.expression != null: stmt.expression.visit(self)
 
+func visit_header():
+	if !shadows_declared(class_n): return
+	make_error('class name "%s", shadows an internal class/variable' % class_n)
+
 func visit_code():
-	if !contains_data(): return
+	if class_n != '': visit_header()
+	
+	if !contains_data() || has_errors: return
 	for expression in (globals + misc + functions):
-		expression.visit(self) #visit calls one of the cooresponding functions here
+		expression.visit(self) 
+		#visit calls one of the cooresponding functions here
 
 
-#func pack_code():
-	#var packed:PackedStringArray = []
-	#
-	#if class_n == '': class_n = 's_%s' %  (functions.hash() + randi()) 
-	#class_n = class_n.substr(0,50) ; var class_st = 'class_name %s' % class_n
-	#
-	#
-	#packed.append(class_st)
-	#if contains_data():
-		#for expression in globals + misc + functions:
-			#packed.append(expression.get_code())
-	#
-	#return '\n'.join(packed)
+func pack_code():
+	var packed:PackedStringArray = []
+	
+	if class_n == '': class_n = 's_%s' %  (functions.hash() + randi()) 
+	class_n = class_n.substr(0,50) ; var class_st = 'class_name %s' % class_n
+	packed.append(class_st)
+	
+	if !contains_data(): return '\n'.join(packed)
+	for expression in globals + misc + functions:
+		packed.append(expression.get_code())
+		#get_code redirects to AST_codegen
+	return '\n'.join(packed)

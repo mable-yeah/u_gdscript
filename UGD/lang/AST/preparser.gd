@@ -278,9 +278,10 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
 				op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
 			
-			var _expr = AST.assignment.new(ref,op,_right)
-			
-			return AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
+			return AST.assignment.new(ref,op,_right)
+			#this was the previous line, i dont remember what i was cooking
+			#BUT it may break something so imma keep it
+			#AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
 		
 	
 	consume(tk_type.NEWLINE,'expected newline after expression, got %s')
