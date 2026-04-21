@@ -242,6 +242,8 @@ func parse_current_scope() -> AST.Expr:
 	
 	return parse_assignment()
 
+
+
 func parse_assignment() -> AST.Expr: #expression or assignment
 	var _p_cursor = cursor
 	var _left = parse_call()
@@ -260,9 +262,8 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		
 		if name != null and name != '':
-			return AST.assignment.new(AST.variable.new(name),operator_type.OP_LOGIC_EQUAL,_right)
-		else:
-			return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right)
+			_left = AST.variable.new(name)
+		return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right,false)
 	
 	if name != null and name != '':
 		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
@@ -278,7 +279,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
 				op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
 			
-			return AST.assignment.new(ref,op,_right)
+			return AST.assignment.new(ref,op,_right,false)
 			#this was the previous line, i dont remember what i was cooking
 			#BUT it may break something so imma keep it
 			#AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
@@ -540,7 +541,7 @@ func parse_term() -> AST.Expr:
 	while check(tk_type.PLUS) || check(tk_type.MINUS):
 		var op_t = advance()
 		var right = parse_factor()
-		var op = operator_type.OP_ADDITION if check(tk_type.PLUS,op_t) else operator_type.OP_SUBTRACTION
+		var op = operator_type.OP_PLUS if check(tk_type.PLUS,op_t) else operator_type.OP_MINUS
 		left = AST.assignment.new(left,op,right)
 	
 	return left
@@ -554,9 +555,9 @@ func parse_factor() -> AST.Expr:
 		
 		match op_t.type:
 			tk_type.STAR:
-				op = operator_type.OP_MULTIPLICATION
+				op = operator_type.OP_MULTIPLY
 			tk_type.SLASH:
-				op = operator_type.OP_DIVISION
+				op = operator_type.OP_DIVIDE
 			tk_type.PERCENT:
 				op = operator_type.OP_MODULO
 			_:

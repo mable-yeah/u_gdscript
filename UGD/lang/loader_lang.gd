@@ -2,6 +2,10 @@ class_name loader_lang ##extra language enums/functions that dont belong to any 
 
 
 enum Operation {
+	OP_MINUS,
+	OP_DIVIDE,
+	OP_MULTIPLY,
+	OP_PLUS,
 	OP_NEGATIVE,
 	OP_NOT,
 	OP_ADDITION,

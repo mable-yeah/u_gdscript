@@ -4,6 +4,7 @@ class_name AST ##contains classes needed to form expression tree's
 
 ##base expression class, all expressions extend this
 @abstract class Expr:
+	var inferred_type:String = "variant"
 	var reduced_value:Variant = null
 	var _tk_st:String = "NONE"
 	var type:loader_lang.Type = loader_lang.Type.NONE:
@@ -23,7 +24,7 @@ class_name AST ##contains classes needed to form expression tree's
 	
 	@abstract func get_code() -> String
 	
-	@abstract func visit(p_compiler:compiler) -> void
+	@abstract func visit(p_compiler:compiler)
 
 ##basic variable name reference
 class variable extends Expr: 
@@ -128,13 +129,15 @@ class assignment extends Expr:
 	var left:Expr
 	var op:loader_lang.Operation
 	var right:Expr
+	var brackets = true
 	
-	func _init(LEFT:Expr,OP:loader_lang.Operation,RIGHT:Expr) -> void:
+	func _init(LEFT:Expr,OP:loader_lang.Operation,RIGHT:Expr,p_brack = true) -> void:
 		type = loader_lang.Type.ASSIGNMENT
 		left = LEFT
 		op = OP
 		right = RIGHT
-	
+		brackets = p_brack
+
 	func get_code():
 		return codegen.visit_assignment(self)
 	

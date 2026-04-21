@@ -35,6 +35,20 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	code = pack_code()
 	print(code)
 
+#TODO 
+#type hints / getting the type of a value
+#making sure a type hint matches that
+#
+#making sure a returned value matches a function's type
+#
+#figure out how to properly verify compatible ternarys, so 
+#'var this = 1 if true else false' isnt valid
+#
+#working out how to make sure a function matches its signature i.e
+#_process() <- needs a delta 
+#
+
+
 
 func def_scope():
 	scope.append({}) ; current_scope_idx += 1
@@ -44,7 +58,10 @@ func leave_scope():
 
 func def_variable(name:String,type := 'variant'):
 	if shadows_declared(name): make_error(errors.shadows % [type,name])
-	current_scope[name] = false
+	current_scope[name] = {
+		'type':type,
+		'init':false
+	}
 
 func shadows_declared(name:String) -> bool:
 	var declared = is_declared(name)
@@ -106,9 +123,6 @@ func visit_index(expr:AST.index):
 
 
 func visit_assignment(expr:AST.assignment):
-	if expr.op == loader_lang.Operation.OP_COMP_EQUAL:
-		return
-	
 	if !is_assignable(expr.left):
 		make_error(errors.assign %[expr.left._tk_st,expr.right._tk_st])
 	
@@ -186,7 +200,7 @@ func visit_code():
 func pack_code():
 	var packed:PackedStringArray = []
 	
-	if class_n == '': class_n = 's_%s' %  (functions.hash() + randi()) 
+	if class_n == '': class_n = 's_%s' %  (globals + misc + functions).hash()
 	class_n = class_n.substr(0,50) ; var class_st = 'class_name %s' % class_n
 	packed.append(class_st)
 	

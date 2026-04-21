@@ -18,10 +18,14 @@ static func get_type_hint(tk:TOKENS.token) -> String:
 static func get_op_st(op:loader_lang.Operation) -> String:
 	var op_enum = loader_lang.Operation
 	match op:
-		op_enum.OP_ADDITION:return '+'
-		op_enum.OP_SUBTRACTION:return  '-' 
-		op_enum.OP_MULTIPLICATION:return  '*' 
-		op_enum.OP_DIVISION:return  '/' 
+		op_enum.OP_MINUS:return '-'
+		op_enum.OP_DIVIDE:return '/'
+		op_enum.OP_MULTIPLY:return '*'
+		op_enum.OP_PLUS:return '+'
+		op_enum.OP_ADDITION:return '+='
+		op_enum.OP_SUBTRACTION:return  '-=' 
+		op_enum.OP_MULTIPLICATION:return  '*=' 
+		op_enum.OP_DIVISION:return  '/=' 
 		op_enum.OP_MODULO:return  '%' 
 		op_enum.OP_POWER:return  '**' 
 		op_enum.OP_BIT_LEFT_SHIFT:return  '<<' 

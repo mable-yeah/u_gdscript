@@ -52,7 +52,9 @@ static func visit_index(expr:AST.index) -> String:
 	return '%s[%s]' % [expr.target.get_code(),expr.idx.get_code()]
 
 static func visit_assignment(expr:AST.assignment) -> String:
-	return '(%s %s %s)' % [expr.left.get_code(),lang_utilities.get_op_st(expr.op),expr.right.get_code()]
+	var statement = '%s %s %s'  % [expr.left.get_code(),lang_utilities.get_op_st(expr.op),expr.right.get_code()]
+	if !expr.brackets: return statement
+	return '(%s)' % statement
 
 static func visit_expression(stmt:AST.expression_Statement) -> String:
 	return stmt.expression.get_code()
