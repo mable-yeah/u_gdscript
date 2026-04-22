@@ -13,6 +13,7 @@ const errors = {
 }
 
 var loop_depth = 0
+var signatures = []
 var scope:Array[Dictionary] = [{}]
 var current_scope_idx:int = 0
 var current_scope:Dictionary:
@@ -48,7 +49,6 @@ func leave_scope():
 
 
 
-
 func def_variable(name:String,type := type_string(TYPE_NIL),data = {}):
 	if shadows_declared(name): make_error(errors.shadows % [type,name])
 	data['type'] = type
@@ -70,9 +70,16 @@ func get_reference(name:String):
 	return type_string(TYPE_NIL)
 
 
-func is_assignable(expr) -> bool:
-	return expr is AST.variable or expr is AST.member_Call or expr is AST.index
-
+func is_assignable(expr:AST.Expr) -> bool:
+	const type = loader_lang.Type
+	var assignables = [
+		type.IDENTIFIER,
+		type.MEMBER_CALL,
+		type.INDEX,
+		type.LITERAL,
+		type.ASSIGNMENT
+	]
+	return assignables.has(expr.type)
 
 func visit_var_decl(stmt:AST.varDecl_Statement):
 	var type = type_string(TYPE_NIL)
@@ -82,7 +89,7 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 		make_error('constants need initializers "%s"' % stmt.name) ; return
 	
 	var hint = lang_utilities.get_type_hint(stmt.type_hint)
-	if hint != '' and type != hint:
+	if hint != '' and stmt.initializer and type != hint:
 		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,hint])
 	def_variable(stmt.name,type)
 
@@ -173,8 +180,6 @@ func visit_dictionary(expr:AST.dictionary):
 	
 func visit_if(stmt:AST.if_Statement):
 	var _condition = stmt.condition.visit(self) 
-	#if condition != type_string(TYPE_BOOL):
-		#make_error(errors.expected % ['boolean',condition,'if'])
 	
 	def_scope()
 	for expression in stmt._then:expression.visit(self)

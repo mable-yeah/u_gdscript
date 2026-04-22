@@ -10,21 +10,18 @@ const err = 'statement type "%s" doesnt have a valid visit function / returns nu
 static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true) -> String:
 	var type_hint = lang_utilities.get_type_hint(stmt.type_hint)
 	var initializer = '%s' % stmt.initializer.get_code() if stmt.initializer != null else ''
-	if !needs_body: return initializer
-	
 	var constant = 'const ' if stmt.is_constant else ''
 	var value = ' = %s' % initializer if initializer != '' else ''
 	if type_hint != '': value = ':%s%s' % [type_hint,value]
+	if !needs_body: return '%s%s' % [stmt.name,value]
 	return '%svar %s%s' %  [constant,stmt.name,value]
 
 static func visit_func_decl(stmt:AST.funcDecl_Statement) -> String:
 	var body:PackedStringArray = parse_body(stmt.body)
 	var parameters:PackedStringArray
 	for p_name in stmt.params:
-		var value = stmt.params[p_name].get_code(false)
-		if value != '':
-			p_name = '%s := %s' % [p_name,value]
-		parameters.append(p_name)
+		var code = stmt.params[p_name].get_code(false)
+		parameters.append(code)
 	
 	var colon = ':' if stmt.type_hint == null else ' -> %s:' % lang_utilities.get_type_hint(stmt.type_hint)
 	return 'func %s(%s)%s%s' %[stmt.name,','.join(parameters),colon,join_body(body)]
