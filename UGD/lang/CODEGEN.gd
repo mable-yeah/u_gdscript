@@ -114,7 +114,7 @@ static func visit_pass(_stmt:AST.pass_Statement) -> String:
 	return 'pass'
 
 static func visit_return(stmt:AST.return_Statement) -> String:
-	return 'return %s' % stmt.expression.get_code() if stmt.expression != null else ''
+	return 'return %s' % [stmt.expression.get_code() if stmt.expression != null else '']
 
 ##parses an array of expressions into a PackedStringArray
 static func parse_body(body:Array[AST.Expr]) -> PackedStringArray:
