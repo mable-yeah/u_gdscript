@@ -60,10 +60,10 @@ class literal extends Expr:
 
 ##'target(argument)'
 class function_call extends Expr: 
-	var target:Expr
+	var target:variable
 	var args:Array[Expr]
 	
-	func _init(p_target:Expr,arguments:Array[Expr] = []) -> void:
+	func _init(p_target:variable,arguments:Array[Expr] = []) -> void:
 		type = loader_lang.Type.FUNC_CALL
 		target = p_target
 		args = arguments

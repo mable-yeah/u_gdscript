@@ -265,7 +265,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			_left = AST.variable.new(name)
 		return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right,false)
 	
-	if name != null and name != '':
+	if name != null and name != '': #property *= value
 		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
 		|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
 			var ref = AST.variable.new(name)

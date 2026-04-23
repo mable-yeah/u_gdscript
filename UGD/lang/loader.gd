@@ -21,7 +21,7 @@ func load_string(code):
 	
 	p_processor = preparser.new(p_lexer.tk_arr)
 	if p_processor.has_errors:
-		printerr(err_message.STOPPED_AT % 'Pre-parser') ; return
+		printerr(err_message.STOPPED_AT % 'Pre-processor') ; return
 	program_ast = p_processor.program
 	
 	p_compiler = compiler.new(program_ast)

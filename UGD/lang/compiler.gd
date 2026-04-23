@@ -3,7 +3,7 @@ class_name compiler extends AST.PROGRAM
 
 
 const errors = {
-	'unreachable':'unreachable code found in function %s after return',
+	'unreachable':'unreachable code found in function "%s" after return',
 	'func':'a function typed "%s" cannot return -> "%s"',
 	'expected':'expected "%s" got -> "%s" instead in %s',
 	'ternary':'Values of the ternary operator are not mutually compatible. %s -> %s',
@@ -13,7 +13,7 @@ const errors = {
 }
 
 var loop_depth = 0
-var signatures = []
+var fn_signatures:Dictionary = {}
 var scope:Array[Dictionary] = [{}]
 var current_scope_idx:int = 0
 var current_scope:Dictionary:
@@ -48,6 +48,22 @@ func leave_scope():
 	scope.pop_back() ; current_scope_idx -= 1
 
 
+func def_signature(function:AST.funcDecl_Statement):
+	var sig = {}
+	sig['params'] = []
+	sig['hint'] = lang_utilities.get_type_hint(function.type_hint)
+	for param in function.params.keys():
+		if !is_declared(param): 
+			make_error('param "%s" isnt in the current scope?' % param)
+			continue
+		var p_sig = {}
+		p_sig['name'] = param
+		p_sig['type'] = get_reference(param)
+		sig['params'].append(p_sig)
+	
+	
+	sig['param_s'] = sig['params'].size()
+	fn_signatures[function.name] = sig
 
 func def_variable(name:String,type := type_string(TYPE_NIL),data = {}):
 	if shadows_declared(name): make_error(errors.shadows % [type,name])
@@ -69,28 +85,35 @@ func get_reference(name:String):
 		if scope[i].has(name): return scope[i][name]['type']
 	return type_string(TYPE_NIL)
 
+func get_signature(name:String):
+	if name in fn_signatures:
+		return fn_signatures[name]
+	make_error('function called without signature/definition "%s"' % name)
+	return {}
 
-func is_assignable(expr:AST.Expr) -> bool:
+func is_assignable(expr:AST.Expr,literal_allowed = true) -> bool:
 	const type = loader_lang.Type
 	var assignables = [
 		type.IDENTIFIER,
 		type.MEMBER_CALL,
 		type.INDEX,
-		type.LITERAL,
 		type.ASSIGNMENT
-	]
+	] 
+	if literal_allowed: assignables += [type.LITERAL]
 	return assignables.has(expr.type)
 
 func visit_var_decl(stmt:AST.varDecl_Statement):
 	var type = type_string(TYPE_NIL)
+	var hint = lang_utilities.get_type_hint(stmt.type_hint)
+	
 	if stmt.initializer != null: 
 		type = stmt.initializer.visit(self) #process init first
 	elif stmt.is_constant: 
 		make_error('constants need initializers "%s"' % stmt.name) ; return
-	
-	var hint = lang_utilities.get_type_hint(stmt.type_hint)
 	if hint != '' and stmt.initializer and type != hint:
 		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,hint])
+	
+	if type == type_string(TYPE_NIL) and hint != '': type = hint
 	def_variable(stmt.name,type)
 
 
@@ -100,9 +123,11 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 	
 	var visited_return = false
 	for param in stmt.params.values(): param.visit(self) 
+	def_signature(stmt)
+	
 	for expression in stmt.body:
 		if visited_return and loop_depth == 0: 
-			make_error(errors.unreachable % stmt.name)
+			make_error(errors.unreachable % stmt.name) ; break
 		expression.visit(self)
 		if expression is AST.return_Statement: visited_return = true
 	
@@ -131,33 +156,52 @@ func visit_literal(expr:AST.literal):
 	return type_string(expr.literal_type)
 
 func visit_function_call(expr:AST.function_call):
-	expr.target.visit(self)
-	for arg in expr.args:
-		arg.visit(self)
+	var name = expr.target.name
+	var sig = get_signature(name)
+	if sig.is_empty(): return
 	
+	var err = 'few' if sig['param_s'] > expr.args.size() else 'many'
+	if sig['param_s'] != expr.args.size():
+		make_error('too %s arguments for call "%s"' % [err,name])
+		return
+	
+	for i in expr.args.size():
+		var arg = expr.args[i]
+		var arg_type = arg.visit(self)
+		var out_type = sig['params'][i]['type']
+		if arg_type != out_type: 
+			make_error('%s argument %s should be -> %s, got "%s" instead' % [name,i + 1,out_type,arg_type])
+		print(arg_type,out_type)
+	return sig['hint']
 
 func visit_member_call(expr:AST.member_Call):
 	expr.target.visit(self)
 	expr.member.visit(self)
-
+	return type_string(TYPE_NIL)
 func visit_index(expr:AST.index):
 	expr.target.visit(self)
 	expr.idx.visit(self)
-
+	return type_string(TYPE_NIL)
 
 func visit_assignment(expr:AST.assignment):
-	if !is_assignable(expr.left):
+	#kind of janky workaround for being able to do
+	#5 = 1, usually that typa stuff stops in the pre-parser
+	#but not allowing literals at all blocks x = (5+5) + 2
+	var literal_allowed = !(expr.op == loader_lang.Operation.OP_LOGIC_EQUAL)
+	if !is_assignable(expr.left,literal_allowed):
 		make_error(errors.assign %[expr.left._tk_st,expr.right._tk_st])
 	
 	var right = expr.right.visit(self)
-	expr.left.visit(self) ; expr.right.visit(self)
+	expr.left.visit(self)
 	return right
 
 func visit_expression(stmt:AST.expression_Statement):
 	stmt.expression.visit(self)
+	return type_string(TYPE_NIL)
 
 func visit_unary(expr:AST.unary):
 	expr.operand.visit(self)
+	return type_string(TYPE_NIL)
 
 func visit_ternary(expr:AST.ternary):
 	var target = expr.target.visit(self) 
@@ -190,6 +234,7 @@ func visit_if(stmt:AST.if_Statement):
 	def_scope()
 	for expression in stmt._else:expression.visit(self)
 	leave_scope()
+	return type_string(TYPE_NIL)
 
 func visit_for(stmt:AST.for_Statement):
 	loop_depth += 1
@@ -197,21 +242,25 @@ func visit_for(stmt:AST.for_Statement):
 	def_variable(stmt.name)
 	for expression in stmt.body:expression.visit(self)
 	loop_depth -= 1 ; leave_scope()
+	return type_string(TYPE_NIL)
 
 func visit_while(stmt:AST.while_Statement):
 	loop_depth += 1 
 	stmt.condition.visit(self) ; def_scope()
 	for expression in stmt.body:expression.visit(self)
 	loop_depth -= 1 ; leave_scope()
+	return type_string(TYPE_NIL)
 
 func visit_break(_stmt:AST.break_Statement):
 	if loop_depth == 0: make_error(errors.loop % 'break')
+	return type_string(TYPE_NIL)
 
 func visit_continue(_stmt:AST.cont_Statement):
 	if loop_depth == 0: make_error(errors.loop % 'continue') 
+	return type_string(TYPE_NIL)
 
 func visit_pass(_stmt:AST.pass_Statement): 
-	pass
+	return type_string(TYPE_NIL)
 
 func visit_return(stmt:AST.return_Statement):
 	var hint = lang_utilities.get_type_hint(current_fn.type_hint)
@@ -228,6 +277,8 @@ func visit_return(stmt:AST.return_Statement):
 	var expr_type = stmt.expression.visit(self)
 	if hint != '' and expr_type != hint:
 		make_error(errors.func % [hint, expr_type])
+	
+	return hint
 
 func visit_header():
 	if !shadows_declared(class_n): return
