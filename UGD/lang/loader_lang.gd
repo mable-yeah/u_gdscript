@@ -58,7 +58,7 @@ enum Type {
 }
 
 
-static var global_class_list:Array[Dictionary]:
+static var global_class_list:PackedStringArray:
 	get():
 		if global_class_list.is_empty():
 			build_global_class_list()
@@ -76,7 +76,10 @@ static func build_class_list():
 	class_list = ClassDB.get_class_list()
 
 static func build_global_class_list():
-	global_class_list = ProjectSettings.get_global_class_list()
+	var class_packed:PackedStringArray
+	for class_data in ProjectSettings.get_global_class_list():
+		class_packed.append(class_data['class'])
+	global_class_list = class_packed
 
 
 static func list_classes():

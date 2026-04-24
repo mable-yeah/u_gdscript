@@ -45,24 +45,25 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 		_: printerr('could not find operation at index %s' % op) ; return ''
 
 
-
 ##returns an Array[Dictionary] formatted identically to the built in get_method_list
 static func get_methods(value:Object,include_builtins := false) -> Array[Dictionary]:
 	var methods:Array[Dictionary] ; var script:Script = value.get_script()
 	if value == null:  printerr('from get_methods: invalid value') ; return methods
 	if script == null: printerr('from get_methods: object may lack a script') ; return methods
 	
+	#methods.append_array(GDScript.new().get_method_list())
 	if include_builtins: methods.append_array(value.get_method_list())
 	methods.append_array(script.get_script_method_list())
 	return methods
 
 ##return's true if string matches a class type or builtin type
-static func is_class_or_type(st:String,allow_type:=true) -> bool:
+static func is_class_or_type(st:String,allow_type:=true,global_classes:=false) -> bool:
+	var class_list = loader_lang.class_list.duplicate()
+	if global_classes:	class_list.append_array(loader_lang.global_class_list)
 	var t = get_builtin_type(st)
 	if allow_type:
-		return t != TYPE_NIL || loader_lang.class_list.has(st)
-	else:
-		return loader_lang.class_list.has(st)
+		return t != TYPE_NIL || class_list.has(st)
+	return class_list.has(st)
 
 
 ##return from all available classes and global classes (and types)

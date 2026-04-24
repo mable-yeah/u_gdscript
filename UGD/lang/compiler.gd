@@ -74,7 +74,7 @@ func def_variable(name:String,type := type_string(TYPE_NIL),data = {}):
 
 func shadows_declared(name:String) -> bool:
 	var declared = is_declared(name)
-	if lang_utilities.is_class_or_type(name): return true
+	if lang_utilities.is_class_or_type(name,true,true): return true
 	return declared
 
 func is_declared(name:String) -> bool:
@@ -141,6 +141,7 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 	if !visited_return and !stmt.skip_processing: 
 		var fallback = AST.return_Statement.new()
 		fallback.visit(self)
+		fallback = null
 	
 	leave_scope()
 	current_fn = null
@@ -156,6 +157,9 @@ func visit_enum(expr:AST.enumerator):
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): 
 		return get_reference_type(expr.name)
+	
+	if lang_utilities.is_class_or_type(expr.name): return expr.name
+	
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 	return type_string(TYPE_NIL)
 
@@ -182,9 +186,26 @@ func visit_function_call(expr:AST.function_call):
 	return sig['hint']
 
 func visit_member_call(expr:AST.member_Call):
-	expr.target.visit(self)
-	expr.member.visit(self)
-	return type_string(TYPE_NIL)
+	var target = expr.target.visit(self)
+	var resolved = resolve_as_object(target)
+	var member = expr.member
+	if resolved == null: 
+		make_error('could not resolve "%s" into a valid object -> member_call' % target)
+		return type_string(TYPE_NIL)
+	
+	def_scope() #for the sake of easing my brain enter a scope here
+	if member is AST.function_call: member = member.target.name
+	if resolved is String and member is String:
+		var method = get_virtual_method(resolved,member)
+		if method == null: return type_string(TYPE_NIL)
+		method.visit(self)
+		method = null
+	
+	var member_visit =  expr.member.visit(self)
+	leave_scope()
+	
+	return member_visit
+
 func visit_index(expr:AST.index):
 	expr.target.visit(self)
 	expr.idx.visit(self)
@@ -201,11 +222,13 @@ func visit_assignment(expr:AST.assignment):
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
 	
+	if right == 'void': make_error(errors.assign % [left,right])
+	
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
 		if !get_reference(expr.left.name)['is_strong']: return right
 		#skip checks if the variant isnt strongly typed
 	
-	if left != right:  make_error(errors.assign % [right, left])
+	if left != right:  make_error(errors.assign % [left,right])
 	return right
 
 func visit_expression(stmt:AST.expression_Statement):
@@ -276,6 +299,8 @@ func visit_pass(_stmt:AST.pass_Statement):
 	return type_string(TYPE_NIL)
 
 func visit_return(stmt:AST.return_Statement):
+	if current_fn == null: return null
+	
 	var hint = lang_utilities.get_type_hint(current_fn.type_hint)
 	var expr_exists = stmt.expression != null
 	
@@ -306,27 +331,49 @@ func visit_code():
 		expression.visit(self) 
 		#visit calls one of the cooresponding functions here
 
-
 #this is needed to register some base level functions to ugd
 func get_builtins():
-	var globalscope = lang_utilities.get_methods(ugd_globalscope.new(),false)
-	for method in globalscope:
-		var function = AST.funcDecl_Statement.new()
-		function.skip_processing = true
-		function.name = method['name']
-		function.varadic = method['flags'] == 17
-		
-		for argument in method['args']:
-			if function.varadic: break
-			var type = type_string(argument['type'])
-			var type_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,type)
-			var arg = AST.varDecl_Statement.new(argument['name'],type_tk,null,false)
-			function.params[argument['name']] = arg
-		
-		var return_type = type_string(method['return']['type'])
-		var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)
-		function.type_hint = return_tk
-		function.visit(self)
+	var globalscope = ugd_globalscope.new()
+	var globalscope_methods = lang_utilities.get_methods(globalscope,false)
+	for method in globalscope_methods:
+		method_from_dict(method).visit(self)
+	
+	globalscope = null
+
+func get_virtual_method(value:StringName,method_name:String) -> AST.funcDecl_Statement:
+	if value == null: make_error('virtual_method provided value is null') ; return null
+	var method_list = ClassDB.class_get_method_list(value)
+	method_list.append_array(ClassDB.class_get_method_list('GDScript'))
+	for method in method_list:
+		if method['name'] != method_name: continue
+		return method_from_dict(method)
+	
+	make_error('could not find method "%s" in -> "%s"' % [method_name,value])
+	return null
+
+
+func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
+	var function = AST.funcDecl_Statement.new()
+	function.skip_processing = true
+	function.name = method['name']
+	function.varadic = method['flags'] == 17
+	
+	for argument in method['args']:
+		if function.varadic: break
+		var type = type_string(argument['type'])
+		var type_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,type)
+		var arg = AST.varDecl_Statement.new(argument['name'],type_tk,null,false)
+		function.params[argument['name']] = arg
+	
+	var return_type = type_string(method['return']['type'])
+	var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)
+	function.type_hint = return_tk
+	return function
+
+
+func resolve_as_object(value:String) -> Variant:
+	if !lang_utilities.is_class_or_type(value,false,false): return null
+	return value
 
 func pack_code():
 	var packed:PackedStringArray = []
