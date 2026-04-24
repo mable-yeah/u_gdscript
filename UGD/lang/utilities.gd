@@ -44,38 +44,17 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 		op_enum.OP_LOGIC_EQUAL: return '='
 		_: printerr('could not find operation at index %s' % op) ; return ''
 
-##return a basic list of script method names
-static func get_script_methods(value:Object) -> Array[String]:
-	var method_n_list:Array[String] = []
-	if value == null: 
-		printerr('invalid value in get_methods')
-		return []
-	var script:Script = value.get_script()
-	if script == null: return []
-	var properties_list = script.get_method_list()
-	for property in properties_list:
-		var n = property.get('name')
-		method_n_list.append(n)
-	return method_n_list
 
 
-##return a basic list of script property names
-static func get_script_property_names(value:Object) -> Array[String]:
-	var property_n_list:Array[String] = []
-	if value == null: 
-		printerr('invalid value in get_methods')
-		return []
-	var script:Script  = value.get_script()
-	if script == null: return []
-	var properties_list = script.get_script_property_list()
-	for property in properties_list:
-		var n = property.get('name')
-		if n == '' || n == 'Built-in script':
-			continue
-		property_n_list.append(n)
-	return property_n_list
-
-
+##returns an Array[Dictionary] formatted identically to the built in get_method_list
+static func get_methods(value:Object,include_builtins := false) -> Array[Dictionary]:
+	var methods:Array[Dictionary] ; var script:Script = value.get_script()
+	if value == null:  printerr('from get_methods: invalid value') ; return methods
+	if script == null: printerr('from get_methods: object may lack a script') ; return methods
+	
+	if include_builtins: methods.append_array(value.get_method_list())
+	methods.append_array(script.get_script_method_list())
+	return methods
 
 ##return's true if string matches a class type or builtin type
 static func is_class_or_type(st:String,allow_type:=true) -> bool:
@@ -94,8 +73,6 @@ static func get_class_or_type(st:String) -> Variant:
 	
 	if loader_lang.class_list.has(st):
 		return loader_lang.class_list.find(st)
-	
-	print(loader_lang.global_class_list)
 	
 	return -1
 

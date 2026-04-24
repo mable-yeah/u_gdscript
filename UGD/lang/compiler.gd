@@ -21,6 +21,7 @@ var current_scope:Dictionary:
 
 var current_fn:AST.funcDecl_Statement = null
 
+
 var has_errors := false
 var code:String = ''
 
@@ -48,17 +49,18 @@ func leave_scope():
 	scope.pop_back() ; current_scope_idx -= 1
 
 
-func def_signature(function:AST.funcDecl_Statement):
+func def_signature(function:AST.funcDecl_Statement,varadic = false):
 	var sig = {}
 	sig['params'] = []
 	sig['hint'] = lang_utilities.get_type_hint(function.type_hint)
+	sig['varadic'] = varadic
 	for param in function.params.keys():
 		if !is_declared(param): 
 			make_error('param "%s" isnt in the current scope?' % param)
 			continue
 		var p_sig = {}
 		p_sig['name'] = param
-		p_sig['type'] = get_reference(param)
+		p_sig['type'] = get_reference_type(param)
 		sig['params'].append(p_sig)
 	
 	
@@ -80,10 +82,15 @@ func is_declared(name:String) -> bool:
 		if scope[i].has(name): return true
 	return false
 
-func get_reference(name:String):
+func get_reference_type(name:String):
 	for i in range(current_scope_idx, -1, -1):
 		if scope[i].has(name): return scope[i][name]['type']
 	return type_string(TYPE_NIL)
+
+func get_reference(name:String):
+	for i in range(current_scope_idx, -1, -1):
+		if scope[i].has(name): return scope[i][name]
+	return {}
 
 func get_signature(name:String):
 	if name in fn_signatures:
@@ -114,7 +121,7 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,hint])
 	
 	if type == type_string(TYPE_NIL) and hint != '': type = hint
-	def_variable(stmt.name,type)
+	def_variable(stmt.name,type,{'is_strong' : hint != ''})
 
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
@@ -123,7 +130,7 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 	
 	var visited_return = false
 	for param in stmt.params.values(): param.visit(self) 
-	def_signature(stmt)
+	def_signature(stmt,stmt.varadic)
 	
 	for expression in stmt.body:
 		if visited_return and loop_depth == 0: 
@@ -131,7 +138,7 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 		expression.visit(self)
 		if expression is AST.return_Statement: visited_return = true
 	
-	if !visited_return: 
+	if !visited_return and !stmt.skip_processing: 
 		var fallback = AST.return_Statement.new()
 		fallback.visit(self)
 	
@@ -148,7 +155,7 @@ func visit_enum(expr:AST.enumerator):
 
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): 
-		return get_reference(expr.name)
+		return get_reference_type(expr.name)
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 	return type_string(TYPE_NIL)
 
@@ -158,12 +165,13 @@ func visit_literal(expr:AST.literal):
 func visit_function_call(expr:AST.function_call):
 	var name = expr.target.name
 	var sig = get_signature(name)
-	if sig.is_empty(): return
+	if sig.is_empty(): return typeof(TYPE_NIL)
 	
+	if sig['varadic']: return sig['hint']
 	var err = 'few' if sig['param_s'] > expr.args.size() else 'many'
 	if sig['param_s'] != expr.args.size():
 		make_error('too %s arguments for call "%s"' % [err,name])
-		return
+		return sig['hint']
 	
 	for i in expr.args.size():
 		var arg = expr.args[i]
@@ -171,7 +179,6 @@ func visit_function_call(expr:AST.function_call):
 		var out_type = sig['params'][i]['type']
 		if arg_type != out_type: 
 			make_error('%s argument %s should be -> %s, got "%s" instead' % [name,i + 1,out_type,arg_type])
-		print(arg_type,out_type)
 	return sig['hint']
 
 func visit_member_call(expr:AST.member_Call):
@@ -192,7 +199,13 @@ func visit_assignment(expr:AST.assignment):
 		make_error(errors.assign %[expr.left._tk_st,expr.right._tk_st])
 	
 	var right = expr.right.visit(self)
-	expr.left.visit(self)
+	var left = expr.left.visit(self)
+	
+	if expr.left.type == loader_lang.Type.IDENTIFIER:
+		if !get_reference(expr.left.name)['is_strong']: return right
+		#skip checks if the variant isnt strongly typed
+	
+	if left != right:  make_error(errors.assign % [right, left])
 	return right
 
 func visit_expression(stmt:AST.expression_Statement):
@@ -285,13 +298,35 @@ func visit_header():
 	make_error('class name "%s", shadows an internal class/variable' % class_n)
 
 func visit_code():
+	get_builtins()
 	if class_n != '': visit_header()
-	
 	if !contains_data() || has_errors: return
+	
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
 		#visit calls one of the cooresponding functions here
 
+
+#this is needed to register some base level functions to ugd
+func get_builtins():
+	var globalscope = lang_utilities.get_methods(ugd_globalscope.new(),false)
+	for method in globalscope:
+		var function = AST.funcDecl_Statement.new()
+		function.skip_processing = true
+		function.name = method['name']
+		function.varadic = method['flags'] == 17
+		
+		for argument in method['args']:
+			if function.varadic: break
+			var type = type_string(argument['type'])
+			var type_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,type)
+			var arg = AST.varDecl_Statement.new(argument['name'],type_tk,null,false)
+			function.params[argument['name']] = arg
+		
+		var return_type = type_string(method['return']['type'])
+		var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)
+		function.type_hint = return_tk
+		function.visit(self)
 
 func pack_code():
 	var packed:PackedStringArray = []

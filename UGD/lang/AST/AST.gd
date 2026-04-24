@@ -234,6 +234,8 @@ class funcDecl_Statement extends Expr:
 	var type_hint:TOKENS.token # -> (TYPE)
 	var params:Dictionary[String,varDecl_Statement]
 	var body:Array[Expr] = []
+	var varadic:bool = false
+	var skip_processing:bool = false
 	
 	func _init() -> void:
 		type = loader_lang.Type.FUNCTION

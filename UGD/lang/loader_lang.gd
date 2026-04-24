@@ -77,3 +77,7 @@ static func build_class_list():
 
 static func build_global_class_list():
 	global_class_list = ProjectSettings.get_global_class_list()
+
+
+static func list_classes():
+	print(class_list) ; print(global_class_list)
