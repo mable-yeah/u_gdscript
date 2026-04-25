@@ -614,19 +614,7 @@ func parse_primary() -> AST.Expr:
 
 	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
-		var tk = advance()
-		var lit:AST.literal
-		match tk.literal:
-			'true':
-				lit = AST.literal.new(true)
-			'false':
-				lit = AST.literal.new(false)
-			'null':
-				lit = AST.literal.new(null)
-			_:
-				#digits/strings are inferred, the literal is already in the correct typing
-				lit = AST.literal.new(tk.literal)
-		return lit
+		return AST.literal.new(advance().literal)
 	
 	#VARIABLE/OBJECT NAME
 	if check(tk_type.IDENTIFIER):

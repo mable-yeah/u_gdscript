@@ -30,12 +30,6 @@ static func visit_variable(expr:AST.variable) -> String:
 	return str(expr.name)
 
 static func visit_literal(expr:AST.literal) -> String: 
-	match typeof(expr.variant):
-		TYPE_NIL:
-			expr.variant = 'null'
-		TYPE_STRING:
-			var st_wrapper = '"' if expr.variant.contains("'") else "'"
-			expr.variant = '%s%s%s' % [st_wrapper,expr.variant,st_wrapper]
 	return str(expr.variant)
 
 static func visit_function_call(expr:AST.function_call) -> String:

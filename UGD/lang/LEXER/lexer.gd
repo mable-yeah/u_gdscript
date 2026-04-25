@@ -552,7 +552,8 @@ func string():
 		read_char()
 		if string_found:
 			break
-	return make_literal(result)
+	
+	return make_literal('%s%s%s' % [quote_char,result,quote_char])
 
 ##returns an annotation token if found, else error
 func annotation():
