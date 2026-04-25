@@ -24,6 +24,7 @@ static func load_string(code:String,className:String) -> Variant:
 	if p_compiler.has_errors:
 		printerr(err.STOPPED_AT % 'Compiler') ; return null
 	
+	#return null
 	return pack_string_as_node(p_compiler.code,className)
 
 

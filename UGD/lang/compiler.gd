@@ -42,7 +42,7 @@ func _init(p_ast:AST.PROGRAM,base_className) -> void:
 	visit_code()
 	if has_errors: return
 	code = pack_code()
-	#print(code)
+	print(code)
 
 func def_scope():
 	scope.append({}) ; current_scope_idx += 1
@@ -129,6 +129,7 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	if type == type_string(TYPE_NIL) and hint != '': type = hint
 	def_variable(stmt.name,type,{'is_strong' : hint != ''})
 	
+	return type
 
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
@@ -152,6 +153,7 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 	
 	leave_scope()
 	current_fn = null
+	return lang_utilities.get_type_hint(stmt.type_hint)
 
 func visit_enum(expr:AST.enumerator):
 	def_variable(expr.name,'enum')
@@ -202,16 +204,22 @@ func visit_member_call(expr:AST.member_Call):
 		return type_string(TYPE_NIL)
 	
 	def_scope() #for the sake of easing my brain enter a scope here
-	if member is AST.function_call: member = member.target.name
-	if resolved is String and member is String:
-		var method = get_virtual_method(resolved,member)
-		if method == null: return type_string(TYPE_NIL)
-		method.visit(self)
-		method = null
+	if member is AST.function_call: 
+		member = member.target.name
+		if resolved is String and member is String:
+			var method = get_virtual_method(resolved,member)
+			if method == null: return type_string(TYPE_NIL)
+			method.visit(self)
+			method = null
+	elif member is AST.variable: 
+		member = member.name
+		var property = get_virtual_property(resolved,member)
+		if property == null: return type_string(TYPE_NIL)
+		target = property.visit(self)
+		property = null
 	
 	expr.member.visit(self)
-	leave_scope()
-	return target
+	leave_scope() ; return target
 
 func visit_index(expr:AST.index):
 	expr.target.visit(self)
@@ -229,13 +237,14 @@ func visit_assignment(expr:AST.assignment):
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
 	
+	#this is STUPID, fix it later future me
+	if left == 'StringName': left = 'String'
 	if right == 'void': make_error(errors.assign % [left,right])
 	
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
 		if !get_reference(expr.left.name)['is_strong']: return right
 		#skip checks if the variant isnt strongly typed
-	
-	if left != right:  make_error(errors.assign % [left,right])
+	if !lang_utilities.inheritence(left,right): make_error(errors.assign % [left,right])
 	return right
 
 func visit_expression(stmt:AST.expression_Statement):
@@ -348,7 +357,7 @@ func get_builtins():
 	globalscope = null
 
 func get_virtual_method(value:StringName,method_name:String) -> AST.funcDecl_Statement:
-	if value == null: make_error('virtual_method provided value is null') ; return null
+	if value == '': make_error('virtual_method provided value is null') ; return null
 	var method_list = ClassDB.class_get_method_list(value)
 	method_list.append_array(ClassDB.class_get_method_list('GDScript'))
 	for method in method_list:
@@ -359,6 +368,28 @@ func get_virtual_method(value:StringName,method_name:String) -> AST.funcDecl_Sta
 	return null
 
 
+func get_virtual_property(value:StringName,property_name:String):
+	if value == '': make_error('virtual_property provided value is null') ; return null
+	var property_list = ClassDB.class_get_property_list(value)
+	property_list.append_array(ClassDB.class_get_property_list('GDScript'))
+	
+	for property in property_list:
+		if property['name'] != property_name: continue
+		return property_from_dict(property)
+	#
+	make_error('could not find property "%s" in -> "%s"' % [property_name,value])
+	return null
+
+
+
+func property_from_dict(property:Dictionary) -> AST.varDecl_Statement:
+	var return_type = type_string(property['type'])
+	var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)
+	var name = property['name']
+	return AST.varDecl_Statement.new(name,return_tk,null,false)
+
+
+
 func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
 	var function = AST.funcDecl_Statement.new()
 	function.skip_processing = true
@@ -367,10 +398,7 @@ func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
 	
 	for argument in method['args']:
 		if function.varadic: break
-		var type = type_string(argument['type'])
-		var type_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,type)
-		var arg = AST.varDecl_Statement.new(argument['name'],type_tk,null,false)
-		function.params[argument['name']] = arg
+		function.params[argument['name']] = property_from_dict(argument)
 	
 	var return_type = type_string(method['return']['type'])
 	var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)

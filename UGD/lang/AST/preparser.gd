@@ -260,9 +260,6 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 		advance()
 		var _right = parse_expression()
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
-		
-		if name != null and name != '':
-			_left = AST.variable.new(name)
 		return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right,false)
 	
 	if name != null and name != '': #property *= value

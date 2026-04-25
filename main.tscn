@@ -3,6 +3,7 @@
 [sub_resource type="GDScript" id="GDScript_7dm0k"]
 script/source = "extends Control
 
+var loader = script_loader.new()
 var scripted_object
 
 func _ready() -> void:
@@ -83,6 +84,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 split_offset = 275
+collapsed = true
 dragging_enabled = false
 
 [node name="RichTextLabel" type="RichTextLabel" parent="HSplitContainer"]
