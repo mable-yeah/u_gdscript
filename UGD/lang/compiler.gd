@@ -24,6 +24,7 @@ var current_fn:AST.funcDecl_Statement = null
 
 var has_errors := false
 var code:String = ''
+var base_class:String = ''
 
 
 func make_error(st:String) -> void:
@@ -31,7 +32,8 @@ func make_error(st:String) -> void:
 	var generic = 'Compiler error: \' %s \''
 	printerr(generic % st)
 
-func _init(p_ast:AST.PROGRAM) -> void:
+func _init(p_ast:AST.PROGRAM,base_className) -> void:
+	base_class = base_className
 	self.class_n =  p_ast.class_n
 	self.extends_n = p_ast.extends_n
 	self.globals = p_ast.globals
@@ -40,7 +42,7 @@ func _init(p_ast:AST.PROGRAM) -> void:
 	visit_code()
 	if has_errors: return
 	code = pack_code()
-	print(code)
+	#print(code)
 
 func def_scope():
 	scope.append({}) ; current_scope_idx += 1
@@ -68,7 +70,9 @@ func def_signature(function:AST.funcDecl_Statement,varadic = false):
 	fn_signatures[function.name] = sig
 
 func def_variable(name:String,type := type_string(TYPE_NIL),data = {}):
-	if shadows_declared(name): make_error(errors.shadows % [type,name])
+	if !data.get('skip',false):
+		if shadows_declared(name): make_error(errors.shadows % [type,name])
+	
 	data['type'] = type
 	current_scope[name] = data
 
@@ -114,19 +118,22 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	var hint = lang_utilities.get_type_hint(stmt.type_hint)
 	
 	if stmt.initializer != null: 
-		type = stmt.initializer.visit(self) #process init first
+		type = str(stmt.initializer.visit(self)) #process init first
 	elif stmt.is_constant: 
 		make_error('constants need initializers "%s"' % stmt.name) ; return
 	if hint != '' and stmt.initializer and type != hint:
 		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,hint])
 	
+	
+	
 	if type == type_string(TYPE_NIL) and hint != '': type = hint
 	def_variable(stmt.name,type,{'is_strong' : hint != ''})
+	
 
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
 	current_fn = stmt
-	def_variable(stmt.name,'function') ; def_scope()
+	def_variable(stmt.name,'function',{'skip':stmt.skip_processing}) ; def_scope()
 	
 	var visited_return = false
 	for param in stmt.params.values(): param.visit(self) 
@@ -181,7 +188,8 @@ func visit_function_call(expr:AST.function_call):
 		var arg = expr.args[i]
 		var arg_type = arg.visit(self)
 		var out_type = sig['params'][i]['type']
-		if arg_type != out_type: 
+		
+		if !lang_utilities.inheritence(out_type,arg_type): 
 			make_error('%s argument %s should be -> %s, got "%s" instead' % [name,i + 1,out_type,arg_type])
 	return sig['hint']
 
@@ -201,10 +209,9 @@ func visit_member_call(expr:AST.member_Call):
 		method.visit(self)
 		method = null
 	
-	var member_visit =  expr.member.visit(self)
+	expr.member.visit(self)
 	leave_scope()
-	
-	return member_visit
+	return target
 
 func visit_index(expr:AST.index):
 	expr.target.visit(self)
@@ -377,10 +384,11 @@ func resolve_as_object(value:String) -> Variant:
 
 func pack_code():
 	var packed:PackedStringArray = []
-	
-	if class_n == '': class_n = 's_%s' %  (globals + misc + functions).hash()
+	packed.append('extends %s' % base_class)
+	if class_n == '': class_n = 's_%s' %  globals.hash()
 	class_n = class_n.substr(0,50) ; var class_st = 'class_name %s' % class_n
 	packed.append(class_st)
+	
 	
 	if !contains_data(): return '\n'.join(packed)
 	for expression in (globals + misc + functions):

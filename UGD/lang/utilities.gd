@@ -1,6 +1,9 @@
 class_name lang_utilities ##utilities for manipulating code in strings
 
 
+static func inheritence(ClassName:StringName,inherits:StringName):
+	if !ClassDB.class_exists(ClassName): return ClassName == inherits
+	return ClassDB.get_inheriters_from_class(ClassName).has(inherits) || ClassName == inherits
 
 ##gets string from type hint token
 static func get_type_hint(tk:TOKENS.token) -> String:

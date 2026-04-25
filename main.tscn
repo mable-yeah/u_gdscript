@@ -3,24 +3,29 @@
 [sub_resource type="GDScript" id="GDScript_7dm0k"]
 script/source = "extends Control
 
-var loader:script_loader = null
+var scripted_object
+
 func _ready() -> void:
 	$parse.pressed.connect(_parse)
 
 
 func _parse():
-	loader = script_loader.new()
-	loader.load_string($HSplitContainer/CodeEdit.text)
-	$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.p_lexer.debug_token_print(false)
+	if scripted_object != null: scripted_object.free()
+	
+	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'Node')
+	
+	if scripted_object != null: add_child(scripted_object)
+
+
 
 var mem = '%s / %s'
-@warning_ignore(\"unused_parameter\")
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	var static_mem = OS.get_static_memory_usage()
 	var peak_mem = OS.get_static_memory_peak_usage()
 	DisplayServer.window_set_title(mem % [String.humanize_size(static_mem),String.humanize_size(peak_mem)])
 
 
+#$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.p_lexer.debug_token_print(false)
 
 
 #class_name yeah
