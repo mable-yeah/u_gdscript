@@ -178,7 +178,20 @@ func visit_variable(expr:AST.variable):
 	return type_string(TYPE_NIL)
 
 func visit_literal(expr:AST.literal):
+	var variant = str(expr.variant)
+	
+	if variant.contains("'") || variant.contains("'"):
+		return type_string(TYPE_STRING)
+	
+	if ['true','false'].has(variant): 
+		return type_string(TYPE_BOOL)
+	
+	if variant == 'null': 
+		return type_string(TYPE_NIL)
+	
 	return type_string(expr.literal_type)
+
+
 
 func visit_function_call(expr:AST.function_call):
 	var name = expr.target.name
@@ -233,11 +246,16 @@ func visit_index(expr:AST.index):
 
 
 func visit_is(expr:AST.is_statement):
-	expr.left.visit(self) ; expr.right.visit(self)
+	var left = expr.left.visit(self) ; var right =  expr.right.visit(self)
 	
-	var right = expr.right
-	if right is AST.variable and lang_utilities.is_builtin(right.name):
+	if !lang_utilities.inheritence(left,right) and not (expr.left is AST.variable):
+		make_error('expression is of type "%s" so it cant be of type "%s"' % [left,right])
 		return type_string(TYPE_NIL)
+	
+	
+	var right_expr = expr.right
+	if right_expr is AST.variable and lang_utilities.is_builtin(right_expr.name):
+		return type_string(TYPE_BOOL)
 	
 	make_error('expected type identifier after "is"')
 	return type_string(TYPE_NIL)
@@ -257,7 +275,6 @@ func visit_assignment(expr:AST.assignment):
 	#this is STUPID, fix it later future me
 	if left == 'StringName': left = 'String'
 	if right == 'void': make_error(errors.assign % [left,right])
-	
 	
 	
 	
