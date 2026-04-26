@@ -247,14 +247,7 @@ func parse_current_scope() -> AST.Expr:
 func parse_assignment() -> AST.Expr: #expression or assignment
 	var _p_cursor = cursor
 	var _left = parse_call()
-	if has_errors:
-		return null
-	
-	var name = null
-	if _left is AST.variable:
-		name = _left.name
-	elif _left is AST.member_Call and _left.target is AST.variable:
-		name = _left.target.name
+	if has_errors: return null
 	
 	if check(tk_type.EQUAL): #property = value
 		advance()
@@ -262,24 +255,22 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
 		return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right,false)
 	
-	if name != null and name != '': #property *= value
-		if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
-		|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
-			var ref = AST.variable.new(name)
-			var op_tk = advance()
-			var _right = parse_expression()
-			consume(tk_type.NEWLINE,'expected newline after op assignment')
+	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
+	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
+		var op_tk = advance()
+		var _right = parse_expression()
+		consume(tk_type.NEWLINE,'expected newline after op assignment')
 
-			var op:operator_type
-			if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
-				op = operator_type.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else operator_type.OP_SUBTRACTION
-			elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
-				op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
-			
-			return AST.assignment.new(ref,op,_right,false)
-			#this was the previous line, i dont remember what i was cooking
-			#BUT it may break something so imma keep it
-			#AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
+		var op:operator_type
+		if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
+			op = operator_type.OP_ADDITION if check(tk_type.PLUS_EQUAL,op_tk) else operator_type.OP_SUBTRACTION
+		elif check(tk_type.STAR_EQUAL,op_tk) || check(tk_type.SLASH_EQUAL,op_tk):
+			op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
+		
+		return AST.assignment.new(_left,op,_right,false)
+		#this was the previous line, i dont remember what i was cooking
+		#BUT it may break something so imma keep it
+		#AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
 		
 	
 	consume(tk_type.NEWLINE,'expected newline after expression, got %s')

@@ -93,7 +93,7 @@ theme_override_font_sizes/normal_font_size = 20
 
 [node name="CodeEdit" type="TextEdit" parent="HSplitContainer"]
 layout_mode = 2
-text = "func test():
+text = "func _ready():
 	var x = 1
 	if x:
 		print(x)"

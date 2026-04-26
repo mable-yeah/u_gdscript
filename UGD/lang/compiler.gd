@@ -120,8 +120,13 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	
 	if stmt.initializer != null:
 		type = str(stmt.initializer.visit(self)) #process init first
+		if stmt.initializer.type_is(loader_lang.Type.IDENTIFIER):
+			if lang_utilities.is_builtin(stmt.initializer.name):
+				make_error(errors.builtin % ('%s in %s' % [stmt.initializer.name,stmt.name]))
+				return type
+		
 	elif stmt.is_constant: 
-		make_error('constants need initializers "%s"' % stmt.name) ; return
+		make_error('constants need initializers "%s"' % stmt.name) ; return type
 	if hint != '' and stmt.initializer and type != hint:
 		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,hint])
 	
@@ -248,13 +253,13 @@ func visit_assignment(expr:AST.assignment):
 	
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
+	
 	#this is STUPID, fix it later future me
 	if left == 'StringName': left = 'String'
 	if right == 'void': make_error(errors.assign % [left,right])
 	
-	if expr.right.type == loader_lang.Type.IDENTIFIER:
-		if lang_utilities.is_class_or_type(right,true,false):
-			make_error(errors.builtin % right)
+	
+	
 	
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
 		if !get_reference(expr.left.name)['is_strong']: return right
