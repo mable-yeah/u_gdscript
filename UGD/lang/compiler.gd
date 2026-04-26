@@ -3,6 +3,7 @@ class_name compiler extends AST.PROGRAM
 
 
 const errors = {
+	'builtin':'Builtin type cannot be used as a name on its own -> "%s"',
 	'unreachable':'unreachable code found in function "%s" after return',
 	'func':'a function typed "%s" cannot return -> "%s"',
 	'expected':'expected "%s" got -> "%s" instead in %s',
@@ -117,7 +118,7 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	var type = type_string(TYPE_NIL)
 	var hint = lang_utilities.get_type_hint(stmt.type_hint)
 	
-	if stmt.initializer != null: 
+	if stmt.initializer != null:
 		type = str(stmt.initializer.visit(self)) #process init first
 	elif stmt.is_constant: 
 		make_error('constants need initializers "%s"' % stmt.name) ; return
@@ -164,8 +165,7 @@ func visit_enum(expr:AST.enumerator):
 		make_error('name "%s" was already inside of enum "%s"' % [name,expr.name])
 
 func visit_variable(expr:AST.variable):
-	if is_declared(expr.name): 
-		return get_reference_type(expr.name)
+	if is_declared(expr.name): return get_reference_type(expr.name)
 	
 	if lang_utilities.is_class_or_type(expr.name): return expr.name
 	
@@ -226,6 +226,18 @@ func visit_index(expr:AST.index):
 	expr.idx.visit(self)
 	return type_string(TYPE_NIL)
 
+
+func visit_is(expr:AST.is_statement):
+	expr.left.visit(self) ; expr.right.visit(self)
+	
+	var right = expr.right
+	if right is AST.variable and lang_utilities.is_builtin(right.name):
+		return type_string(TYPE_NIL)
+	
+	make_error('expected type identifier after "is"')
+	return type_string(TYPE_NIL)
+
+
 func visit_assignment(expr:AST.assignment):
 	#kind of janky workaround for being able to do
 	#5 = 1, usually that typa stuff stops in the pre-parser
@@ -236,14 +248,18 @@ func visit_assignment(expr:AST.assignment):
 	
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
-	
 	#this is STUPID, fix it later future me
 	if left == 'StringName': left = 'String'
 	if right == 'void': make_error(errors.assign % [left,right])
 	
+	if expr.right.type == loader_lang.Type.IDENTIFIER:
+		if lang_utilities.is_class_or_type(right,true,false):
+			make_error(errors.builtin % right)
+	
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
 		if !get_reference(expr.left.name)['is_strong']: return right
 		#skip checks if the variant isnt strongly typed
+	
 	if !lang_utilities.inheritence(left,right): make_error(errors.assign % [left,right])
 	return right
 

@@ -70,7 +70,11 @@ static var class_list:PackedStringArray:
 			build_class_list()
 		return class_list
 
-static var built_in_types:Dictionary[String,Variant.Type] = {}
+static var built_in_types:Dictionary[String,Variant.Type] = {}:
+	get():
+		if built_in_types.is_empty():
+			build_built_in_types()
+		return built_in_types
 
 static func build_class_list():
 	class_list = ClassDB.get_class_list()
@@ -81,6 +85,12 @@ static func build_global_class_list():
 		class_packed.append(class_data['class'])
 	global_class_list = class_packed
 
+static func build_built_in_types():
+	var types:Dictionary[String,Variant.Type] = {}
+	for i in Variant.Type.TYPE_MAX:
+		var type = i as Variant.Type
+		types[type_string(type)] = type
+	built_in_types = types
 
 static func list_classes():
 	print(class_list) ; print(global_class_list)

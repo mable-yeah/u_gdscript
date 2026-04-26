@@ -43,6 +43,7 @@ static func pack_string_as_node(code:String,p_class:String) -> Variant:
 	
 	
 	###ok i lied it DOES error check but only for super serious things that pass every thing else
+	##also its not very discriptive when it does check
 	if err_script != OK: 
 		var msg = err.CRITICAL % error_string(err_script)
 		OS.alert(msg) ; OS.crash(msg)

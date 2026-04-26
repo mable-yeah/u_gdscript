@@ -87,6 +87,11 @@ static func visit_if(stmt:AST.if_Statement) -> String:
 	var stmt_else = '\n\t/d else:%s' % join_body(else_body) if !stmt._else.is_empty() else ''
 	return 'if %s:%s' % [stmt.condition.get_code(),join_body(body)] + stmt_else
 
+
+static func visit_is(stmt:AST.is_statement) -> String:
+	return '%s is %s' % [stmt.left.get_code(),stmt.right.get_code()]
+
+
 static func visit_for(stmt:AST.for_Statement) -> String: 
 	var body = parse_body(stmt.body)
 	return 'for %s in %s:%s' % [stmt.name,stmt.iter.get_code(),join_body(body)]

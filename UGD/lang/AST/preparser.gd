@@ -362,6 +362,7 @@ func parse_if() -> AST.if_Statement:
 
 
 
+
 #starts after 'var' not at 'var', so advance/consume before calling this
 func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.varDecl_Statement:
 	var _name = consume(tk_type.IDENTIFIER,'expected variable name') 
@@ -459,8 +460,15 @@ func is_at_end() -> bool:
 
 ##the entering/start function for the entire expression chain
 func parse_expression(can_assign:=true) -> AST.Expr:
-	return parse_ternary_expression(can_assign)
+	return parse_is(can_assign)
 
+func parse_is(can_assign):
+	var left = parse_or_expression(can_assign)
+	if check(tk_type.IS):
+		advance()
+		var right = parse_primary()
+		return AST.is_statement.new(left, right)
+	return left
 
 func parse_ternary_expression(can_assign) -> AST.Expr:
 	var left = parse_or_expression(can_assign)

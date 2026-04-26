@@ -205,6 +205,7 @@ class dictionary extends Expr:
 		return p_compiler.visit_dictionary(self)
 
 
+
 ##x if z else y
 class ternary extends Expr:
 	var target:Expr #x
@@ -370,6 +371,20 @@ class while_Statement extends Expr:
 		return p_compiler.visit_while(self)
 
 
+class is_statement extends Expr:
+	var left:Expr
+	var right:Expr
+	
+	
+	func _init(p_left:Expr,p_right:Expr):
+		left = p_left
+		right = p_right
+	
+	func get_code() -> String:
+		return codegen.visit_is(self)
+
+	func visit(p_compiler:compiler):
+		return p_compiler.visit_is(self)
 
 ##if condition: then_body else: else_body
 class if_Statement extends Expr:

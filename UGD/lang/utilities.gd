@@ -82,11 +82,11 @@ static func get_class_or_type(st:String) -> Variant:
 
 ##'float' -> TYPE_FLOAT
 static func get_builtin_type(st_type:String) -> Variant.Type:
-	if loader_lang.built_in_types.is_empty(): #build it if its empty
-		for i in Variant.Type.TYPE_MAX:
-			var type = i as Variant.Type
-			loader_lang.built_in_types[type_string(type)] = type
 	return loader_lang.built_in_types.get(st_type,TYPE_NIL)
+
+static func is_builtin(st_type:String):
+	return loader_lang.built_in_types.keys().has(st_type)
+
 
 ##scrubs godot style comments, '##','#'
 static func scrub_comments_GD(script_code:String) -> String:
