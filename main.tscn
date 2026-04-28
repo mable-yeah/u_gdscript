@@ -9,14 +9,13 @@ var scripted_object
 func _ready() -> void:
 	$parse.pressed.connect(_parse)
 
-
 func _parse():
 	if scripted_object != null: scripted_object.free()
 	
 	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'Node')
 	
 	if scripted_object != null: add_child(scripted_object)
-
+	
 
 
 var mem = '%s / %s'

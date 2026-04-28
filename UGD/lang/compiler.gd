@@ -196,7 +196,7 @@ func visit_literal(expr:AST.literal):
 func visit_function_call(expr:AST.function_call):
 	var name = expr.target.name
 	var sig = get_signature(name)
-	if sig.is_empty(): return typeof(TYPE_NIL)
+	if sig.is_empty(): return type_string(TYPE_NIL)
 	
 	if sig['varadic']: return sig['hint']
 	var err = 'few' if sig['param_s'] > expr.args.size() else 'many'
@@ -208,6 +208,10 @@ func visit_function_call(expr:AST.function_call):
 		var arg = expr.args[i]
 		var arg_type = arg.visit(self)
 		var out_type = sig['params'][i]['type']
+		
+		#ints/floats get converted within the script to the correct type
+		#so i dont need to enforce values within vector2/vector2i as ints/floats
+		if ['int','float'].has(arg_type) and arg_type != out_type: arg_type = out_type
 		
 		if !lang_utilities.inheritence(out_type,arg_type): 
 			make_error('%s argument %s should be -> %s, got "%s" instead' % [name,i + 1,out_type,arg_type])
@@ -240,8 +244,29 @@ func visit_member_call(expr:AST.member_Call):
 	leave_scope() ; return target
 
 func visit_index(expr:AST.index):
-	expr.target.visit(self)
-	expr.idx.visit(self)
+	var target = expr.target.visit(self)
+	var index = expr.idx.visit(self)
+	
+	match target:
+		'Array':
+			if index != 'int':
+				make_error('Invalid index type "%s" on base Array' % index)
+				return type_string(TYPE_NIL)
+			
+		'Dictionary': 
+			pass
+			#dicts allow basically everything for indexing
+			#u can witawee do 'dict[func():pass] = null' and it'll work
+			
+		'String':
+			if index != 'int':
+				make_error('Invalid index type "%s" on base Array' % index)
+				return type_string(TYPE_NIL)
+			
+		_:
+			make_error('cannot use subscript operator on a base of type "%s"' % target)
+			return type_string(TYPE_NIL)
+	
 	return type_string(TYPE_NIL)
 
 
@@ -353,18 +378,18 @@ func visit_pass(_stmt:AST.pass_Statement):
 	return type_string(TYPE_NIL)
 
 func visit_return(stmt:AST.return_Statement):
-	if current_fn == null: return null
+	if current_fn == null: return type_string(TYPE_NIL)
 	
 	var hint = lang_utilities.get_type_hint(current_fn.type_hint)
 	var expr_exists = stmt.expression != null
 	
 	if hint == 'void':
 		if expr_exists: make_error(errors.func % ['void', stmt.expression.visit(self)])
-		return
+		return type_string(TYPE_NIL)
 
 	if !expr_exists: 
 		if hint != '': make_error(errors.func % [hint, type_string(TYPE_NIL)])
-		return
+		return type_string(TYPE_NIL)
 
 	var expr_type = stmt.expression.visit(self)
 	if hint != '' and expr_type != hint:
@@ -376,18 +401,12 @@ func visit_header():
 	if !shadows_declared(class_n): return
 	make_error('class name "%s", shadows an internal class/variable' % class_n)
 
-func visit_code():
-	get_builtins()
-	if class_n != '': visit_header()
-	if !contains_data() || has_errors: return
-	
-	for expression in (globals + misc + functions):
-		expression.visit(self) 
-		#visit calls one of the cooresponding functions here
+
 
 #this is needed to register some base level functions to ugd
 func get_builtins():
 	var globalscope = ugd_globalscope.new()
+	
 	var globalscope_methods = lang_utilities.get_methods(globalscope,false)
 	for method in globalscope_methods:
 		method_from_dict(method).visit(self)
@@ -443,10 +462,23 @@ func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
 	function.type_hint = return_tk
 	return function
 
-
 func resolve_as_object(value:String) -> Variant:
 	if !lang_utilities.is_class_or_type(value,false,false): return null
 	return value
+
+
+
+
+func visit_code():
+	get_builtins()
+	if class_n != '': visit_header()
+	if !contains_data() || has_errors: return
+	
+	for expression in (globals + misc + functions):
+		expression.visit(self) 
+		#visit calls one of the cooresponding functions here
+
+
 
 func pack_code():
 	var packed:PackedStringArray = []

@@ -59,6 +59,17 @@ static func get_methods(value:Object,include_builtins := false) -> Array[Diction
 	methods.append_array(script.get_script_method_list())
 	return methods
 
+static func get_propertys(value:Object,include_builtins := false) -> Array[Dictionary]:
+	var methods:Array[Dictionary] ; var script:Script = value.get_script()
+	if value == null:  printerr('from get_propertys: invalid value') ; return methods
+	if script == null: printerr('from get_propertys: object may lack a script') ; return methods
+	
+	if include_builtins: methods.append_array(value.get_property_list())
+	methods.append_array(script.get_script_property_list())
+	return methods
+
+
+
 ##return's true if string matches a class type or builtin type
 static func is_class_or_type(st:String,allow_type:=true,global_classes:=false) -> bool:
 	var class_list = loader_lang.class_list.duplicate()
