@@ -14,8 +14,9 @@ func _parse():
 	
 	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'Node')
 	
-	if scripted_object != null: add_child(scripted_object)
-	
+	if scripted_object != null: 
+		add_child(scripted_object)
+		$HSplitContainer/RichTextLabel.text = scripted_object.get_script().get_source_code()
 
 
 var mem = '%s / %s'
@@ -83,7 +84,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 split_offset = 275
-collapsed = true
 dragging_enabled = false
 
 [node name="RichTextLabel" type="RichTextLabel" parent="HSplitContainer"]

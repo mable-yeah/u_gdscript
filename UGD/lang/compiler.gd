@@ -1,7 +1,6 @@
 class_name compiler extends AST.PROGRAM
 ##handles AST analysis and re-compiling code into gd script
 
-
 const errors = {
 	'builtin':'Builtin type cannot be used as a name on its own -> "%s"',
 	'unreachable':'unreachable code found in function "%s" after return',
@@ -13,14 +12,15 @@ const errors = {
 	'shadows':'%s shadows previously declared/internal class : "%s"'
 }
 
+
+var current_fn:AST.funcDecl_Statement = null
+
 var loop_depth = 0
 var fn_signatures:Dictionary = {}
 var scope:Array[Dictionary] = [{}]
-var current_scope_idx:int = 0
-var current_scope:Dictionary:
-	get(): return scope.get(current_scope_idx)
 
-var current_fn:AST.funcDecl_Statement = null
+var current_scope:Dictionary: 
+	get(): return scope.back()
 
 
 var has_errors := false
@@ -33,7 +33,7 @@ func make_error(st:String) -> void:
 	var generic = 'Compiler error: \' %s \''
 	printerr(generic % st)
 
-func _init(p_ast:AST.PROGRAM,base_className) -> void:
+func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	base_class = base_className
 	self.class_n =  p_ast.class_n
 	self.extends_n = p_ast.extends_n
@@ -42,28 +42,34 @@ func _init(p_ast:AST.PROGRAM,base_className) -> void:
 	self.misc = p_ast.misc
 	visit_code()
 	if has_errors: return
-	code = pack_code()
-	print(code)
+	code = lang_utilities.pack_AST(self)
 
-func def_scope():
-	scope.append({}) ; current_scope_idx += 1
+func visit_code():
+	get_builtins()
+	if class_n != '': visit_header()
+	if !contains_data() || has_errors: return
+	
+	for expression in (globals + misc + functions):
+		expression.visit(self) 
+		#visit calls one of the cooresponding functions here
 
-func leave_scope():
-	scope.pop_back() ; current_scope_idx -= 1
 
+func def_scope(): scope.append({})
+
+func leave_scope(): scope.pop_back()
+
+func scope_range(): return range(scope.size() - 1, -1, -1)
 
 func def_signature(function:AST.funcDecl_Statement,varadic = false):
 	var sig = {}
 	sig['params'] = []
 	sig['hint'] = lang_utilities.get_type_hint(function.type_hint)
 	sig['varadic'] = varadic
-	for param in function.params.keys():
-		if !is_declared(param): 
-			make_error('param "%s" isnt in the current scope?' % param)
-			continue
+	for param_name in function.params.keys():
 		var p_sig = {}
-		p_sig['name'] = param
-		p_sig['type'] = get_reference_type(param)
+		var param = function.params[param_name]
+		p_sig['name'] = param_name
+		p_sig['type'] = lang_utilities.get_type_hint(param.type_hint)
 		sig['params'].append(p_sig)
 	
 	
@@ -83,17 +89,10 @@ func shadows_declared(name:String) -> bool:
 	return declared
 
 func is_declared(name:String) -> bool:
-	for i in range(current_scope_idx, -1, -1):
-		if scope[i].has(name): return true
-	return false
+	return !get_reference(name).is_empty()
 
-func get_reference_type(name:String):
-	for i in range(current_scope_idx, -1, -1):
-		if scope[i].has(name): return scope[i][name]['type']
-	return type_string(TYPE_NIL)
-
-func get_reference(name:String):
-	for i in range(current_scope_idx, -1, -1):
+func get_reference(name:String) -> Dictionary:
+	for i in scope_range():
 		if scope[i].has(name): return scope[i][name]
 	return {}
 
@@ -106,12 +105,10 @@ func get_signature(name:String):
 func is_assignable(expr:AST.Expr,literal_allowed = true) -> bool:
 	const type = loader_lang.Type
 	var assignables = [
-		type.IDENTIFIER,
-		type.MEMBER_CALL,
-		type.INDEX,
-		type.ASSIGNMENT
+		type.IDENTIFIER,type.MEMBER_CALL,
+		type.INDEX,type.ASSIGNMENT
 	] 
-	if literal_allowed: assignables += [type.LITERAL]
+	if literal_allowed: assignables.append(type.LITERAL)
 	return assignables.has(expr.type)
 
 func visit_var_decl(stmt:AST.varDecl_Statement):
@@ -170,7 +167,8 @@ func visit_enum(expr:AST.enumerator):
 		make_error('name "%s" was already inside of enum "%s"' % [name,expr.name])
 
 func visit_variable(expr:AST.variable):
-	if is_declared(expr.name): return get_reference_type(expr.name)
+	if is_declared(expr.name): 
+		return get_reference(expr.name).get('type',type_string(TYPE_NIL))
 	
 	if lang_utilities.is_class_or_type(expr.name): return expr.name
 	
@@ -446,7 +444,6 @@ func property_from_dict(property:Dictionary) -> AST.varDecl_Statement:
 	return AST.varDecl_Statement.new(name,return_tk,null,false)
 
 
-
 func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
 	var function = AST.funcDecl_Statement.new()
 	function.skip_processing = true
@@ -465,31 +462,3 @@ func method_from_dict(method:Dictionary) -> AST.funcDecl_Statement:
 func resolve_as_object(value:String) -> Variant:
 	if !lang_utilities.is_class_or_type(value,false,false): return null
 	return value
-
-
-
-
-func visit_code():
-	get_builtins()
-	if class_n != '': visit_header()
-	if !contains_data() || has_errors: return
-	
-	for expression in (globals + misc + functions):
-		expression.visit(self) 
-		#visit calls one of the cooresponding functions here
-
-
-
-func pack_code():
-	var packed:PackedStringArray = []
-	packed.append('extends %s' % base_class)
-	if class_n == '': class_n = 's_%s' %  globals.hash()
-	class_n = class_n.substr(0,50) ; var class_st = 'class_name %s' % class_n
-	packed.append(class_st)
-	
-	
-	if !contains_data(): return '\n'.join(packed)
-	for expression in (globals + misc + functions):
-		packed.append(expression.get_code())
-		#get_code redirects to AST_codegen
-	return '\n'.join(packed)

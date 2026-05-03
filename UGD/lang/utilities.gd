@@ -154,3 +154,19 @@ static func scrub_whitespace(script_code:String) -> String:
 		if line.strip_edges() == "":
 			scrubbed.erase(line)
 	return "\n".join(scrubbed)
+
+
+
+
+static func pack_AST(p_ast:compiler) -> String:
+	var packed:PackedStringArray = []
+	packed.append('extends %s' % p_ast.base_class)
+	if p_ast.class_n == '': p_ast.class_n = 's_%s' %  p_ast.globals.hash()
+	p_ast.class_n = p_ast.class_n.substr(0,50) ; var class_st = 'class_name %s' % p_ast.class_n
+	packed.append(class_st)
+	
+	
+	if !p_ast.contains_data(): return '\n'.join(packed)
+	for expression in (p_ast.globals + p_ast.misc + p_ast.functions):
+		packed.append(expression.get_code())
+	return '\n'.join(packed)
