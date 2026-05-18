@@ -32,10 +32,10 @@ static func load_string(code:String,className:String) -> Variant:
 ##WARNING this doesn't error handle the code itself, thats what load_string() is for
 static func pack_string_as_node(code:String,p_class:String) -> Variant:
 	var node:Object = ClassDB.instantiate(p_class)
-	
+	var sha = code.sha1_text()
 	if code == '' || node == null: return null
 	
-	if scripts.has(code): node.set_script(scripts[code]) ; return node
+	if scripts.has(sha): node.set_script(scripts[sha]) ; return node
 	
 	var script = GDScript.new()
 	script.set_source_code(code)
@@ -49,5 +49,14 @@ static func pack_string_as_node(code:String,p_class:String) -> Variant:
 		OS.alert(msg) ; OS.crash(msg)
 
 	node.set_script(script)
-	scripts[code] = script
+	scripts[sha] = script
 	return node
+
+#NOTE: keeping scripts cached 
+#(especially ones that arent being reloaded with new code constantly like in the example scene), 
+#is actually better than clearing it when reloading a scene!
+#as an internal reference to a script is always kept if it ends up being used anywhere
+#I THINK, thats just a theory though
+#so basicawwy just clear the node on reload and keep the cache
+static func clear_scripts():
+	scripts.clear()

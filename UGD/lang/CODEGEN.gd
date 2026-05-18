@@ -10,11 +10,11 @@ const err = 'statement type "%s" doesnt have a valid visit function / returns nu
 static func visit_var_decl(stmt:AST.varDecl_Statement,needs_body := true) -> String:
 	var type_hint = lang_utilities.get_type_hint(stmt.type_hint)
 	var initializer = '%s' % stmt.initializer.get_code() if stmt.initializer != null else ''
-	var constant = 'const ' if stmt.is_constant else ''
+	var leading = 'const ' if stmt.is_constant else 'var'
 	var value = ' = %s' % initializer if initializer != '' else ''
 	if type_hint != '': value = ':%s%s' % [type_hint,value]
 	if !needs_body: return '%s%s' % [stmt.name,value]
-	return '%svar %s%s' %  [constant,stmt.name,value]
+	return '%s %s%s' %  [leading,stmt.name,value]
 
 static func visit_func_decl(stmt:AST.funcDecl_Statement) -> String:
 	var body:PackedStringArray = parse_body(stmt.body)

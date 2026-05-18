@@ -3,21 +3,21 @@
 [sub_resource type="GDScript" id="GDScript_7dm0k"]
 script/source = "extends Control
 
-var loader = script_loader.new()
 var scripted_object
 
 func _ready() -> void:
 	$parse.pressed.connect(_parse)
-
+	$reload.pressed.connect(
+		func():
+			free_scripted_object()
+			get_tree().change_scene_to_file(\"res://main.tscn\")
+	)
 func _parse():
-	if scripted_object != null: scripted_object.free()
-	
+	free_scripted_object()
 	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'Node')
-	
 	if scripted_object != null: 
 		add_child(scripted_object)
 		$HSplitContainer/RichTextLabel.text = scripted_object.get_script().get_source_code()
-
 
 var mem = '%s / %s'
 func _process(_delta: float) -> void:
@@ -26,24 +26,11 @@ func _process(_delta: float) -> void:
 	DisplayServer.window_set_title(mem % [String.humanize_size(static_mem),String.humanize_size(peak_mem)])
 
 
-#$HSplitContainer/RichTextLabel.text = '[\\n%s \\n]' % loader.p_lexer.debug_token_print(false)
 
-
-#class_name yeah
-#@export var yeah = false
-#var typeshit:float = 0.0
-##var invalid_int = 0.00.0
-#var longass = 1000.000
-#var hextest = 0xFF0000
-#var binary = 0b000
-#var othershit = \"string test\"
-##var invalid_str = \"string test
-#func _ready() -> void:
-	#print(othershit)
-	#yeah(typeshit)
-#
-#func yeah(shit:String):
-	#print(shit)
+func free_scripted_object():
+	if scripted_object == null: return
+	scripted_object.set_script(null)
+	scripted_object.free()
 "
 
 [node name="main" type="Control"]
@@ -70,6 +57,22 @@ offset_right = 28.5
 grow_horizontal = 2
 grow_vertical = 0
 text = "PARSE"
+
+[node name="reload" type="Button" parent="."]
+z_index = 4096
+z_as_relative = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 42.0
+offset_top = -31.0
+offset_right = 100.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "reload"
 
 [node name="HSplitContainer" type="HSplitContainer" parent="."]
 layout_mode = 1

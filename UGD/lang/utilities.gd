@@ -1,6 +1,13 @@
 class_name lang_utilities ##utilities for manipulating code in strings
 
 
+static func get_family(ClassName:StringName) -> PackedStringArray:
+	if !ClassDB.class_exists(ClassName): 
+		printerr('could not get family from %s as that class is invalid' % ClassName)
+		return []
+	return ClassDB.get_inheriters_from_class(ClassName)
+
+
 static func inheritence(ClassName:StringName,inherits:StringName):
 	if !ClassDB.class_exists(ClassName): return ClassName == inherits
 	return ClassDB.get_inheriters_from_class(ClassName).has(inherits) || ClassName == inherits
@@ -46,6 +53,25 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 		op_enum.OP_LOGIC_AND: return '&&'
 		op_enum.OP_LOGIC_EQUAL: return '='
 		_: printerr('could not find operation at index %s' % op) ; return ''
+
+
+
+
+
+static func get_class_methods(name:String):
+	if !lang_utilities.is_class_or_type(name,true,true):
+		return [{}]
+	
+	if ClassDB.class_exists(name): #is an actual class
+		return ClassDB.class_get_method_list(name)
+	else: #everything else
+		if is_builtin(name): name = 'ugd_%s' % name
+		for c in ProjectSettings.get_global_class_list():
+			if c['class'] != name: continue
+			var script = load(c['path'])
+			var instance = ClassDB.instantiate(c['base'])
+			instance.set_script(script)
+			return get_methods(instance)
 
 
 ##returns an Array[Dictionary] formatted identically to the built in get_method_list
