@@ -180,7 +180,7 @@ func parse_func_declaration() -> AST.funcDecl_Statement:
 		if check(tk_type.IDENTIFIER) || check(tk_type.TK_VOID):
 			_type = advance()
 		else:
-			make_error('expected identifier or void after "->", got "%s"' % peek())
+			make_error('expected identifier or void after "->", got "%s"' % peek().get_name())
 		
 	consume(tk_type.COLON,'expected ":" after function declaration, got "%s"')
 	skip_newlines()

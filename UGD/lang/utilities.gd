@@ -102,14 +102,14 @@ static func is_class_or_type(st:String,allow_type:=true,global_classes:=false) -
 	if global_classes:	class_list.append_array(loader_lang.global_class_list)
 	var t = get_builtin_type(st)
 	if allow_type:
-		return t != TYPE_NIL || class_list.has(st)
+		return t != TYPE_MAX || class_list.has(st)
 	return class_list.has(st)
 
 
 ##return from all available classes and global classes (and types)
 static func get_class_or_type(st:String) -> Variant:
 	var t = get_builtin_type(st)
-	if t != TYPE_NIL:
+	if t != TYPE_MAX:
 		return t
 	
 	if loader_lang.class_list.has(st):
@@ -119,7 +119,7 @@ static func get_class_or_type(st:String) -> Variant:
 
 ##'float' -> TYPE_FLOAT
 static func get_builtin_type(st_type:String) -> Variant.Type:
-	return loader_lang.built_in_types.get(st_type,TYPE_NIL)
+	return loader_lang.built_in_types.get(st_type,TYPE_MAX)
 
 static func is_builtin(st_type:String):
 	return loader_lang.built_in_types.keys().has(st_type)

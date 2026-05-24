@@ -2,6 +2,9 @@ class_name compiler extends AST.PROGRAM
 ##handles AST analysis and re-compiling code into gd script
 
 const errors = {
+	'call_param':'a function call parameter of "%s" does not match its expected signature, expected "%s" got "%s"',
+	'signature':'function "%s" does not match its parent signature, "%s"',
+	'invalid_hint':'could not find type -> "%s"',
 	'builtin':'Builtin type cannot be used as a name on its own -> "%s"',
 	'unreachable':'unreachable code found in function "%s" after return',
 	'func':'a function typed "%s" cannot return -> "%s"',
@@ -12,54 +15,25 @@ const errors = {
 	'shadows':'%s shadows previously declared/internal class : "%s"'
 }
 
-
-
 var current_fn:AST.funcDecl_Statement = null
 
 var loop_depth = 0
 var scope:Array[Dictionary] = [{}]
-
-
-const kind = u_object.kind
-
-
-enum data_type {
-	TYPE_NIL,
-	TYPE_VOID,
-	TYPE_OBJECT,
-	TYPE_BOOL,
-	TYPE_INT,
-	TYPE_FLOAT,
-	TYPE_STRING,
-	TYPE_ARRAY,
-	TYPE_DICT,
-	TYPE_ENUM,
-}
-
-
-#this is KIND of what im thinkin of doing here
-#just putting out the commit just so i can have a fallback point
-#to refrence when i fuck up
-#SO BASICAWWY, the old compiler uses a shit ton of string comparison
-#and i want to change that because its very very difficult to evaluate
-#so instead things are seperated into "u_object's/ref's"
-#that way i can instead just get the reference to an object/variable/function
-#and call a function on that reference instead of calling something like
-#'get_virtual_method' on the old compiler
-#ALSO i need to support abstract methods too
-
-#maybe also make a wrapper class for types
-#like "u_kind" or something
-
-
+var jumped_scopes:Array[Dictionary]
 
 var current_scope:Dictionary: 
 	get(): return scope.back()
 
-
 var has_errors := false
 var code:String = ''
 var base_class:String = ''
+
+
+#whatever, parse my func signatures
+var signatures:Dictionary[String,func_sig] = { 
+	'_ready':func_sig.new('_ready','void',[]),
+	'_process':func_sig.new('_process','void',[TYPE_FLOAT]),
+}
 
 
 func make_error(st:String) -> void:
@@ -78,19 +52,16 @@ func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	visit_code()
 	if has_errors: return
 	code = lang_utilities.pack_AST(self)
-	print(code)
+	print_rich('[color=green]%s[/color]' % code)
 
 func visit_code():
-	#get_builtins()
 	if class_n != '': visit_header()
 	if !contains_data() || has_errors: return
 	
-	
-	#doin this so function declarations arent that linear
-	#i.e u dont HAVE to have test() declared before _ready()
-	#if u need to call test() inside _ready
+	#need 2 do this so definitions arent linear
 	for stmt in functions:
-		def_variable(u_object.new(stmt.name,kind.FUNCTION))
+		def_variable(u_object.new(stmt.name,stmt))
+	
 	
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
@@ -101,11 +72,21 @@ func def_scope(): scope.append({})
 
 func leave_scope(): scope.pop_back()
 
+func jump_scope(): 
+	for i in (scope.size() - 1): 
+		jumped_scopes.append(scope.pop_back()) ; loop_depth -= 1
+
+func append_jumps():
+	for i in jumped_scopes: 
+		scope.append(i) ; loop_depth += 1
+
+
 func scope_range(): return range(scope.size() - 1, -1, -1)
 
 
+
 func def_variable(ref:u_object):
-	if shadows_declared(ref.name): make_error(errors.shadows % [ref.typing(),ref.name])
+	if shadows_declared(ref.name): make_error(errors.shadows % ['',ref.name])
 	current_scope[ref.name] = ref
 
 func shadows_declared(name:String) -> bool:
@@ -138,37 +119,44 @@ func visit_header():
 
 
 func visit_var_decl(stmt:AST.varDecl_Statement):
-	var ref = u_object.new(stmt.name,kind.VARIABLE)
-	var type:data_type = data_type.TYPE_NIL
-	ref.hint = lang_utilities.get_type_hint(stmt.type_hint)
+	var ref = u_object.new(stmt.name,stmt)
+	var hint_valid = ref.resolve_hint(stmt.type_hint)
+	var init = stmt.initializer != null
+	
+	if !hint_valid and ref.hint_n != '':
+		make_error(errors.invalid_hint % ref.hint_n)
+	
+	if stmt.is_constant and !init:
+		make_error('constants need initializers "%s"' % stmt.name)
+	
+	if init:
+		var init_type:Variant.Type = stmt.initializer.visit(self)
+		if ref.hint_n != '' and ref.hint != init_type:
+			make_error('variable "%s" doesnt match type hint -> %s' % [ref.name,ref.hint_n])
+		else:
+			ref.hint = init_type
+	
 	def_variable(ref)
-	
-	if stmt.initializer != null:
-		type = stmt.initializer.visit(self) #process init first
-		if type in [data_type.TYPE_NIL,data_type.TYPE_VOID]:
-			make_error('invalid direct assignment of %s in %s' % [type,stmt.name])
-			return ref.hint
-		
-		if stmt.initializer.type_is(loader_lang.Type.IDENTIFIER):
-			if lang_utilities.is_builtin(stmt.initializer.name):
-				make_error(errors.builtin % ('%s in %s' % [stmt.initializer.name,stmt.name]))
-				return ref.hint
-	
-	elif stmt.is_constant: 
-		make_error('constants need initializers "%s"' % stmt.name) ; return ref.hint
-	if ref.hint != '' and stmt.initializer and as_string(type) != ref.hint:
-		make_error('variable "%s" doesnt match type hint -> %s' % [stmt.name,ref.hint])
-	
-	return ref.hint
+	return ref
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
 	var ref := get_reference(stmt.name)
+	if ref.is_resolved(): return ref
+	var hint_valid = ref.resolve_hint(stmt.type_hint)
 	var visited_return := false
-	ref.hint = lang_utilities.get_type_hint(stmt.type_hint)
+	jump_scope() ; def_scope()
 	
-	current_fn = stmt
-	def_scope()
-	for param in stmt.params.values(): param.visit(self) 
+	if !hint_valid and ref.hint_n != '':
+		make_error(errors.invalid_hint % ref.hint_n)
+	
+	for param in stmt.params.values(): 
+		var p_ref = param.visit(self)
+		ref.params.append(p_ref.hint)
+	
+	if signatures.has(ref.name) and !ref.compare_object(signatures[ref.name]):
+		var sig = signatures[ref.name].sig_string()
+		make_error(errors.signature % [ref.name,sig])
+	
 	
 	for expression in stmt.body:
 		if visited_return and loop_depth == 0: 
@@ -176,61 +164,266 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 		expression.visit(self)
 		if expression is AST.return_Statement: visited_return = true
 	
-	if !visited_return and !stmt.skip_processing: 
-		var fallback = AST.return_Statement.new()
-		fallback.visit(self)
-		fallback = null
+	#if !visited_return:
+		#make_error('add a return')
 	
-	leave_scope()
-	current_fn = null
-	
+	ref.resolve()
+	leave_scope() ; append_jumps()
 	return ref
 
 
+
+
+func visit_literal(expr:AST.literal):
+	var variant = str(expr.variant)
+	
+	if variant.contains("'") || variant.contains('"'):
+		return TYPE_STRING
+	
+	if variant in ['true','false']: 
+		return TYPE_BOOL
+	
+	if variant == 'null': 
+		return TYPE_NIL
+	
+	return expr.literal_type
+
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): 
-		return get_reference(expr.name).type
-	
-	if lang_utilities.is_class_or_type(expr.name): return expr.name
+		return get_reference(expr.name).hint
 	
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
-	return data_type.TYPE_NIL
+	return TYPE_NIL
+
+func visit_expression(stmt:AST.expression_Statement):
+	stmt.expression.visit(self)
+	return TYPE_NIL
+
+func visit_unary(expr:AST.unary):
+	expr.operand.visit(self)
+	return TYPE_NIL
+
+func visit_ternary(expr:AST.ternary):
+	var target = expr.target.visit(self) 
+	var left = expr.left.visit(self) 
+	var right = expr.right.visit(self)
+	
+	if left != TYPE_BOOL: make_error(errors.expected % ['boolean',type_string(left),'ternary'])
+	if target != right: make_error(errors.ternary % [type_string(target),type_string(right)])
+	return target
+
+func visit_is(expr:AST.is_statement):
+	var _left = expr.left.visit(self) ; var right =  expr.right.visit(self)
+	
+	var right_expr = expr.right
+	if right_expr is AST.variable and lang_utilities.is_builtin(right_expr.name):
+		return TYPE_BOOL
+	
+	make_error('expected type identifier after "is"')
+	return TYPE_NIL
+
+func visit_if(stmt:AST.if_Statement):
+	var _condition = stmt.condition.visit(self) 
+	
+	def_scope()
+	for expression in stmt._then:expression.visit(self)
+	leave_scope()
+	
+	if stmt._else.is_empty(): return 
+	
+	def_scope()
+	for expression in stmt._else:expression.visit(self)
+	leave_scope()
+	return TYPE_BOOL
+
+
+
+
+
+func visit_assignment(expr:AST.assignment):
+	var literal_allowed = !(expr.op == loader_lang.Operation.OP_LOGIC_EQUAL)
+	if !is_assignable(expr.left,literal_allowed): 
+		var err = 'invalid assignment target, only identifier, attribute, and subscriptions can be assigned'
+		if literal_allowed:
+			err = errors.assign %[expr.left._tk_st,expr.right._tk_st]
+		make_error(err) #helps fix being able to do 2 = 5
+		return TYPE_NIL
+	
+	var right = expr.right.visit(self)
+	var left = expr.left.visit(self)
+	
+	if right == TYPE_MAX:
+		make_error('cannot assign a functions result, if the function is un-typed')
+		return TYPE_NIL
+	
+	if expr.left.type == loader_lang.Type.IDENTIFIER:
+		var ref = get_reference(expr.left.name)
+		if ref == null: return TYPE_NIL
+		
+		if ref.is_weak: #re-assign and return
+			ref.hint = right
+			return right
+	
+	if left != right: make_error(errors.assign % [type_string(left),type_string(right)])
+	return right
+
+
+func visit_function_call(expr:AST.function_call):
+	var name := expr.target.name
+	var ref := get_reference(name)
+	if ref == null: 
+		make_error('function does not exist -> "%s"' % name)
+		return TYPE_NIL
+	
+	if !ref.is_resolved():
+		ref.ast_expr.visit(self)
+		
+	
+	#varadic functions generally dont follow any typing througout
+	if ref.varadic: return ref.hint 
+	
+	var param_s = ref.params.size() ; var arg_s = expr.args.size()
+	var err = 'few' if param_s > arg_s else 'many'
+	
+	if param_s != arg_s:
+		make_error('too %s arguments for call "%s"' % [err,name])
+		return TYPE_NIL
+	
+	var local_args:Array[Variant.Type] = []
+	for arg in expr.args: 
+		var visit = arg.visit(self)
+		if !(visit is Variant.Type): continue
+		local_args.append(visit)
+	
+	
+	if !ref.compare_params(local_args):
+		var err_arr = [ref.name,u_object.format_param(ref.params),u_object.format_param(local_args)]
+		make_error(errors.call_param % err_arr)
+	
+	return ref.hint
+
+
+func visit_for(stmt:AST.for_Statement):
+	loop_depth += 1
+	stmt.iter.visit(self) ; def_scope()
+	def_variable(u_object.new(stmt.name))
+	for expression in stmt.body:
+		expression.visit(self)
+	loop_depth -= 1 ; leave_scope()
+	return TYPE_NIL
+
+func visit_while(stmt:AST.while_Statement):
+	loop_depth += 1 
+	stmt.condition.visit(self) ; def_scope()
+	for expression in stmt.body:expression.visit(self)
+	loop_depth -= 1 ; leave_scope()
+	return TYPE_NIL
+
+
+
+func visit_break(_stmt:AST.break_Statement):
+	if loop_depth == 0: make_error(errors.loop % 'break')
+	return TYPE_NIL
+
+func visit_continue(_stmt:AST.cont_Statement):
+	if loop_depth == 0: make_error(errors.loop % 'continue') 
+	return TYPE_NIL
+
+func visit_pass(_stmt:AST.pass_Statement): 
+	return TYPE_NIL
+
+
+
+func visit_array(expr:AST.array):
+	for element in expr.elements:
+		element.visit(self) 
+	return TYPE_ARRAY
+
+func visit_dictionary(expr:AST.dictionary):
+	for element in expr.elements.values():
+		element.visit(self)
+	return TYPE_DICTIONARY
+
+func visit_index(_expr:AST.index):
+	make_error('index call unimplemented')
+
+func visit_member_call(_stmt:AST.member_Call):
+	make_error('member call unimplemented')
+
+
 
 class u_object:
-	enum kind {
-		FUNCTION,
-		VARIABLE,
-	}
-	
-	var type:kind
 	var name:String
-	var hint:String
 	
+	#its worth noting TYPE_MAX, is essentially used like 'TYPE_ANY'
+	var hint:Variant.Type ; var hint_n:String
+	
+	var ast_expr:AST.Expr
+	
+	var is_weak:bool:
+		get():
+			return hint_n == ''
+	#if hint exists but the hint_n is empty, the object type can change
+	#i.e its 'weak'
 
+	var params:Array[Variant.Type] = []
+	var varadic := false
 	
-	var meta = {}
+	var resolved := false
 	
-	func _init(p_name:String,p_type:kind) -> void:
+	func _init(p_name:String,expr:AST.Expr = null) -> void:
 		name = p_name
-		type = p_type
+		ast_expr = expr
+	
+	func is_resolved(): return resolved
+	func resolve(): resolved = true
+	
+	##only resolves built in types, so custom classes shouldn't work
+	func resolve_hint(tk_hint:TOKENS.token) -> bool:
+		var valid := true
+		var hint_st := lang_utilities.get_type_hint(tk_hint)
+		var resolved_tk:Variant.Type = lang_utilities.get_builtin_type(hint_st)
+		
+		if resolved_tk == TYPE_MAX and hint_st != '':
+			if hint_st != 'void': valid = false
+			else: hint = TYPE_NIL
+		
+		hint = resolved_tk
+		hint_n = hint_st
+		return valid
+		#if i were to support MORE classes i'd
+		#add a second step where i ask classDB what the base type of a
+		#class is, that way SOME non-built ins can work
 	
 	
-	func typing() -> String:
-		return kind.keys()[type]
+	##returns true if objects match
+	func compare_object(ref:u_object):
+		var hint_valid = hint_n == ref.hint_n ; var name_valid = name == ref.name
+		if ref.hint_n == 'void' and hint_n == '': hint_valid = true
+		return hint_valid && name_valid && compare_params(ref.params)
+	
+	##compares params with p_param
+	func compare_params(p_param:Array[Variant.Type]) -> bool:
+		var valid := true ; var i := 0
+		if params.size() != p_param.size(): return false
+		while i < params.size():
+			if params[i] != p_param[i] and params[i] != TYPE_MAX:
+				valid = false ; break
+			i += 1
+		return valid
+	
+	##formats an array with types in it to a string, 'int,float'
+	static func format_param(p_param:Array[Variant.Type]):
+		var p_st = []
+		for param in p_param: p_st.append(type_string(param))
+		return ','.join(p_st)
 
-
-func as_string(type:data_type) -> String:
-	var data = {
-	data_type.TYPE_NIL:'null',
-	data_type.TYPE_VOID:'void',
-	data_type.TYPE_BOOL:'bool',
-	data_type.TYPE_INT:'int',
-	data_type.TYPE_FLOAT:'float',
-	data_type.TYPE_STRING:'String',
-	data_type.TYPE_ARRAY:'Array',
-	data_type.TYPE_DICT:'Dictionary',
-	data_type.TYPE_ENUM:'Enum',
-	data_type.TYPE_OBJECT:'Object',
-	}
+#this helps with defining abstract/placeholder functions
+class func_sig extends u_object:
+	func _init(p_name:String,type_hint:String,p_param:Array[Variant.Type],p_varadic = false) -> void:
+		name = p_name ; params = p_param ; varadic = p_varadic
+		resolve_hint(TOKENS.create_token(TOKENS.type.IDENTIFIER,type_hint))
 	
-	return data.get(type,data_type.TYPE_NIL)
+	##returns function as 'func_name(param_type) -> return_type'
+	func sig_string() -> String:
+		return '%s(%s) -> %s' % [name,format_param(params),hint_n]

@@ -163,6 +163,8 @@ const KEYWORDS:Dictionary = {
 	'TAU': type.CONST_TAU,
 }
 
+
+
 ##creates a token and returns it
 static func create_token(p_type:TOKENS.type = TOKENS.type.EMPTY,p_literal:Variant = null) -> token:
 	var tk = token.new(p_type,p_literal)
