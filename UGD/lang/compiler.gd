@@ -12,14 +12,19 @@ const errors = {
 	'ternary':'Values of the ternary operator are not mutually compatible. %s -> %s',
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
-	'shadows':'%s shadows previously declared/internal class : "%s"'
+	'shadows':'%s shadows previously declared/internal class : "%s"',
+	'unimplemented':'%s call unimplemented'
 }
 
-var current_fn:AST.funcDecl_Statement = null
+var current_fn:u_object = null
 
 var loop_depth = 0
+
+
 var scope:Array[Dictionary] = [{}]
 var jumped_scopes:Array[Dictionary]
+var jump_depth = 0
+
 
 var current_scope:Dictionary: 
 	get(): return scope.back()
@@ -28,13 +33,11 @@ var has_errors := false
 var code:String = ''
 var base_class:String = ''
 
-
-#whatever, parse my func signatures
-var signatures:Dictionary[String,func_sig] = { 
-	'_ready':func_sig.new('_ready','void',[]),
-	'_process':func_sig.new('_process','void',[TYPE_FLOAT]),
-}
-
+var signatures:Dictionary[String,func_sig] = {
+	'print':func_sig.new('print','void',[],true),
+	'printt':func_sig.new('printt','void',[],true),
+	'printerr':func_sig.new('printerr','void',[],true)
+} 
 
 func make_error(st:String) -> void:
 	has_errors = true
@@ -55,13 +58,17 @@ func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	print_rich('[color=green]%s[/color]' % code)
 
 func visit_code():
+	signatures.merge(register_class(base_class))
 	if class_n != '': visit_header()
 	if !contains_data() || has_errors: return
 	
-	#need 2 do this so definitions arent linear
 	for stmt in functions:
 		def_variable(u_object.new(stmt.name,stmt))
 	
+	#resolve the signature if its not already being re-defined
+	for sig in signatures.values():
+		if is_declared(sig.name): continue
+		sig.resolve() ; def_variable(sig)
 	
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
@@ -72,13 +79,16 @@ func def_scope(): scope.append({})
 
 func leave_scope(): scope.pop_back()
 
-func jump_scope(): 
-	for i in (scope.size() - 1): 
-		jumped_scopes.append(scope.pop_back()) ; loop_depth -= 1
+func jump_scope():
+	var local_scope = scope.duplicate() ; local_scope.reverse()
+	var size = scope.size() - 1
+	
+	jump_depth = loop_depth ; loop_depth = 0
+	jumped_scopes = local_scope.slice(0,size) ; scope = local_scope.slice(size)
 
 func append_jumps():
-	for i in jumped_scopes: 
-		scope.append(i) ; loop_depth += 1
+	loop_depth = jump_depth ; jump_depth = 0
+	jumped_scopes.reverse() ; scope.append_array(jumped_scopes)
 
 
 func scope_range(): return range(scope.size() - 1, -1, -1)
@@ -131,10 +141,13 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	
 	if init:
 		var init_type:Variant.Type = stmt.initializer.visit(self)
+		if init_type == TYPE_MAX:
+			make_error('variable "%s" could not be assigned as its initializer is typed "void"' % ref.name)
+			
 		if ref.hint_n != '' and ref.hint != init_type:
 			make_error('variable "%s" doesnt match type hint -> %s' % [ref.name,ref.hint_n])
-		else:
-			ref.hint = init_type
+		
+		ref.hint = init_type
 	
 	def_variable(ref)
 	return ref
@@ -145,7 +158,7 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 	var hint_valid = ref.resolve_hint(stmt.type_hint)
 	var visited_return := false
 	jump_scope() ; def_scope()
-	
+	current_fn = ref
 	if !hint_valid and ref.hint_n != '':
 		make_error(errors.invalid_hint % ref.hint_n)
 	
@@ -164,13 +177,39 @@ func visit_func_decl(stmt:AST.funcDecl_Statement):
 		expression.visit(self)
 		if expression is AST.return_Statement: visited_return = true
 	
-	#if !visited_return:
-		#make_error('add a return')
+	if !visited_return and ref.hint_n != '' and ref.hint_n != 'void':
+		make_error('not all code paths return a value / function is typed but the main body doesnt return')
 	
 	ref.resolve()
 	leave_scope() ; append_jumps()
+	current_fn = null
 	return ref
 
+
+
+func visit_return(stmt:AST.return_Statement):
+	var expr_exists = stmt.expression != null
+	var ref = current_fn
+	var expr_hint = stmt.expression.visit(self) if expr_exists else TYPE_NIL
+	
+	if ref == null: return TYPE_NIL
+	
+	#hint exists and is void AND a return expression exists
+	if ref.hint_n and ref.hint == TYPE_MAX and expr_exists:
+		make_error(errors.func % ['void', type_string(expr_hint)])
+		return TYPE_NIL
+	
+	#hint exists but expression doesnt
+	if !expr_exists: 
+		if ref.hint_n != '': make_error(errors.func % [ref.hint_n, type_string(TYPE_NIL)])
+		return TYPE_NIL
+	
+	#hint exists but expression doesnt match it
+	if ref.hint_n != '' and ref.hint != expr_hint:
+		make_error(errors.func % [ref.hint_n, type_string(expr_hint)])
+		return TYPE_NIL
+	
+	return ref.hint
 
 
 
@@ -271,13 +310,13 @@ func visit_assignment(expr:AST.assignment):
 func visit_function_call(expr:AST.function_call):
 	var name := expr.target.name
 	var ref := get_reference(name)
+	
 	if ref == null: 
 		make_error('function does not exist -> "%s"' % name)
 		return TYPE_NIL
 	
 	if !ref.is_resolved():
 		ref.ast_expr.visit(self)
-		
 	
 	#varadic functions generally dont follow any typing througout
 	if ref.varadic: return ref.hint 
@@ -333,24 +372,33 @@ func visit_pass(_stmt:AST.pass_Statement):
 	return TYPE_NIL
 
 
+func visit_array(_expr:AST.array):
+	make_error(errors.unimplemented % 'array')
 
-func visit_array(expr:AST.array):
-	for element in expr.elements:
-		element.visit(self) 
-	return TYPE_ARRAY
+func visit_dictionary(_expr:AST.dictionary):
+	make_error(errors.unimplemented % 'dictionary')
 
-func visit_dictionary(expr:AST.dictionary):
-	for element in expr.elements.values():
-		element.visit(self)
-	return TYPE_DICTIONARY
 
 func visit_index(_expr:AST.index):
-	make_error('index call unimplemented')
+	make_error(errors.unimplemented % 'index')
 
 func visit_member_call(_stmt:AST.member_Call):
-	make_error('member call unimplemented')
+	make_error(errors.unimplemented % 'member')
 
 
+
+func register_class(p_class:String) -> Dictionary[String,func_sig]:
+	var registry:Dictionary[String,func_sig] = {}
+	var class_methods = lang_utilities.get_class_methods(p_class)
+	for method in class_methods:
+		var arguments:Array[Variant.Type] = []
+		var type = type_string(method.return.type)
+		
+		if type == 'Nil': type = 'void'
+		for arg in method.args: arguments.append(arg.type)
+		
+		registry[method.name] = func_sig.new(method.name,type,arguments,false)
+	return registry
 
 class u_object:
 	var name:String
@@ -370,6 +418,8 @@ class u_object:
 	var varadic := false
 	
 	var resolved := false
+	
+	var is_classed := false
 	
 	func _init(p_name:String,expr:AST.Expr = null) -> void:
 		name = p_name
