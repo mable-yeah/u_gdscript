@@ -85,6 +85,16 @@ static func get_methods(value:Object,include_builtins := false) -> Array[Diction
 	methods.append_array(script.get_script_method_list())
 	return methods
 
+
+##gives a method in a dictionary
+static func this_method(method_name:String,class_n:String) -> Dictionary:
+	var list = lang_utilities.get_class_methods(class_n)
+	for method in list:
+		if method['name'] == method_name:
+			return method
+	return {}
+
+
 static func get_propertys(value:Object,include_builtins := false) -> Array[Dictionary]:
 	var methods:Array[Dictionary] ; var script:Script = value.get_script()
 	if value == null:  printerr('from get_propertys: invalid value') ; return methods

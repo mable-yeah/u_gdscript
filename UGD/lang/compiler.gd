@@ -229,7 +229,9 @@ func visit_literal(expr:AST.literal):
 
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): 
-		return get_reference(expr.name).hint
+		var ref = get_reference(expr.name)
+		if ref != null:
+			return get_reference(expr.name).hint
 	
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 	return TYPE_NIL
@@ -374,16 +376,41 @@ func visit_pass(_stmt:AST.pass_Statement):
 
 func visit_array(_expr:AST.array):
 	make_error(errors.unimplemented % 'array')
+	return TYPE_NIL
 
 func visit_dictionary(_expr:AST.dictionary):
 	make_error(errors.unimplemented % 'dictionary')
+	return TYPE_NIL
 
 
 func visit_index(_expr:AST.index):
 	make_error(errors.unimplemented % 'index')
+	return TYPE_NIL
 
-func visit_member_call(_stmt:AST.member_Call):
-	make_error(errors.unimplemented % 'member')
+func visit_member_call(stmt:AST.member_Call):
+	if !(stmt.target is AST.variable):
+		make_error('cannot call a member on a non-variable reference -> "%s"' % stmt.target.get_type_name())
+		return TYPE_NIL
+	
+	var member = stmt.member; var name = stmt.target.name
+	var ref:u_object = get_reference(name)
+	
+	if ref == null:
+		ref = u_object.new(name)
+		if !ref.resolve_name_as_class():
+			make_error('cannot resolve name "%s" as a class or variable in this scope' % ref.name)
+			return TYPE_NIL
+	
+	#i think killing myself for writing code should be allowed!
+	var is_property = member is AST.variable
+	member = member.target.name if !is_property else member.name
+	var data = ref.get_virtual_data(member,is_property)
+	
+	if data.is_empty(): 
+		printerr('property/method "%s" does not exist in -> "%s"' % [member,ref.name])
+		return TYPE_NIL
+	
+	return TYPE_NIL
 
 
 
@@ -441,9 +468,35 @@ class u_object:
 		hint = resolved_tk
 		hint_n = hint_st
 		return valid
-		#if i were to support MORE classes i'd
-		#add a second step where i ask classDB what the base type of a
-		#class is, that way SOME non-built ins can work
+	
+	
+	func resolve_name_as_class() -> bool:
+		var n_is_class = ClassDB.class_exists(name)
+		if !n_is_class: 
+			printerr('cannot resolve %s as a valid class' % name)
+			return false
+		
+		#jank maybe ???? idkkkk
+		hint = typeof(ClassDB.instantiate(name)) as Variant.Type
+		hint_n = name
+		return true
+	
+	#just straight bullshitting so i dont need two functions for this (like the old version)
+	func get_virtual_data(p_name:String,is_property:bool):
+		var list:Array ; var to_append:Array
+		
+		list = ClassDB.class_get_property_list(p_name) if is_property\
+		else lang_utilities.get_class_methods(p_name)
+		
+		to_append = ClassDB.class_get_property_list('GDScript') if is_property\
+		else ClassDB.class_get_method_list('GDScript')
+		
+		list.append_array(to_append)
+		
+		for virtual in list:
+			if virtual.get('name',null) != p_name: continue
+			return virtual
+		return {}
 	
 	
 	##returns true if objects match
