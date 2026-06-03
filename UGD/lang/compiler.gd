@@ -141,6 +141,18 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	
 	if init:
 		var init_type:Variant.Type = stmt.initializer.visit(self)
+		
+		if stmt.initializer is AST.member_Call: #assign .new manually :/
+			var name = stmt.initializer.target.name
+			var member_call = stmt.initializer.member_name
+			if member_call == 'new' and !hint_valid:
+				ref.hint_n = name
+				ref.resolve_hint_as_class()
+				init_type = ref.hint
+			#theres probs a big downside to this aside from it being ugly
+			#but for now it works
+		
+		
 		if init_type == TYPE_MAX:
 			make_error('variable "%s" could not be assigned as its initializer is typed "void"' % ref.name)
 			
@@ -230,8 +242,7 @@ func visit_literal(expr:AST.literal):
 func visit_variable(expr:AST.variable):
 	if is_declared(expr.name): 
 		var ref = get_reference(expr.name)
-		if ref != null:
-			return get_reference(expr.name).hint
+		if ref != null: return ref.hint
 	
 	make_error('variable reference does not exist in the current scope "%s"' % expr.name)
 	return TYPE_NIL
@@ -293,8 +304,8 @@ func visit_assignment(expr:AST.assignment):
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
 	
-	if right == TYPE_MAX:
-		make_error('cannot assign a functions result, if the function is un-typed')
+	if right == TYPE_MAX || right == TYPE_NIL:
+		make_error('cannot assign a functions result, if the function is un-typed or void')
 		return TYPE_NIL
 	
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
@@ -392,25 +403,29 @@ func visit_member_call(stmt:AST.member_Call):
 		make_error('cannot call a member on a non-variable reference -> "%s"' % stmt.target.get_type_name())
 		return TYPE_NIL
 	
-	var member = stmt.member; var name = stmt.target.name
+	var member = stmt.member_name; var name = stmt.target.name
 	var ref:u_object = get_reference(name)
-	
 	if ref == null:
-		ref = u_object.new(name)
-		if !ref.resolve_name_as_class():
+		ref = u_object.new(name) ; ref.hint_n = name
+		if !ref.resolve_hint_as_class(): 
 			make_error('cannot resolve name "%s" as a class or variable in this scope' % ref.name)
 			return TYPE_NIL
+			#only allowing node's to be instanced member wise
+			#forces direct references i.e
+			#'x = Node.new()' ; rather than allowing 'x = Node'
 	
-	#i think killing myself for writing code should be allowed!
-	var is_property = member is AST.variable
-	member = member.target.name if !is_property else member.name
-	var data = ref.get_virtual_data(member,is_property)
 	
+	var data = ref.get_virtual_data(member,stmt.is_property)
 	if data.is_empty(): 
-		printerr('property/method "%s" does not exist in -> "%s"' % [member,ref.name])
+		make_error('property/method "%s" does not exist in -> "%s"' % [member,ref.name])
 		return TYPE_NIL
 	
-	return TYPE_NIL
+	var return_type = TYPE_NIL
+	
+	
+	if data.has('return'): return_type = data['return']['type']
+	elif data.has('type'): return_type = data['type']
+	return return_type
 
 
 
@@ -448,6 +463,9 @@ class u_object:
 	
 	var is_classed := false
 	
+	var meta := {}
+	
+	
 	func _init(p_name:String,expr:AST.Expr = null) -> void:
 		name = p_name
 		ast_expr = expr
@@ -470,29 +488,28 @@ class u_object:
 		return valid
 	
 	
-	func resolve_name_as_class() -> bool:
-		var n_is_class = ClassDB.class_exists(name)
+	func resolve_hint_as_class() -> bool:
+		var n_is_class = ClassDB.class_exists(hint_n)
 		if !n_is_class: 
-			printerr('cannot resolve %s as a valid class' % name)
+			printerr('cannot resolve %s as a valid class' % hint_n)
 			return false
 		
-		#jank maybe ???? idkkkk
-		hint = typeof(ClassDB.instantiate(name)) as Variant.Type
-		hint_n = name
+		#jank maybe ???? idkkkk, this might always resolve as TYPE_OBJECT
+		hint = typeof(ClassDB.instantiate(hint_n)) as Variant.Type
+		hint_n = hint_n
 		return true
 	
 	#just straight bullshitting so i dont need two functions for this (like the old version)
 	func get_virtual_data(p_name:String,is_property:bool):
 		var list:Array ; var to_append:Array
-		
-		list = ClassDB.class_get_property_list(p_name) if is_property\
-		else lang_utilities.get_class_methods(p_name)
+		if hint_n == '': return {}
+		list = ClassDB.class_get_property_list(hint_n) if is_property\
+		else lang_utilities.get_class_methods(hint_n)
 		
 		to_append = ClassDB.class_get_property_list('GDScript') if is_property\
 		else ClassDB.class_get_method_list('GDScript')
 		
 		list.append_array(to_append)
-		
 		for virtual in list:
 			if virtual.get('name',null) != p_name: continue
 			return virtual

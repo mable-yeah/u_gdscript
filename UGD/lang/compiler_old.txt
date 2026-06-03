@@ -440,7 +440,6 @@ func get_virtual_property(value:StringName,property_name:String):
 	return null
 
 
-
 func property_from_dict(property:Dictionary) -> AST.varDecl_Statement:
 	var return_type = type_string(property['type'])
 	var return_tk = TOKENS.create_token(TOKENS.type.IDENTIFIER,return_type)

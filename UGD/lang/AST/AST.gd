@@ -80,6 +80,15 @@ class member_Call extends Expr:
 	var target:Expr
 	var member:Expr
 	
+	
+	var is_property:bool :
+		get(): 
+			return member is AST.variable
+	
+	var member_name:String :
+		get():
+			return member.target.name if !is_property else member.name
+	
 	func _init(p_target:Expr,arg:Expr) -> void:
 		type = loader_lang.Type.MEMBER_CALL
 		target = p_target
