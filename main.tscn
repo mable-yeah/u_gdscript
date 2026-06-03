@@ -19,6 +19,8 @@ func _parse():
 		add_child(scripted_object)
 		$HSplitContainer/RichTextLabel.text = scripted_object.get_script().get_source_code()
 
+
+
 var mem = '%s / %s'
 func _process(_delta: float) -> void:
 	var static_mem = OS.get_static_memory_usage()

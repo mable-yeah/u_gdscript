@@ -33,11 +33,19 @@ var has_errors := false
 var code:String = ''
 var base_class:String = ''
 
-var signatures:Dictionary[String,func_sig] = {
+var signatures:Dictionary[String,func_sig] = {}
+
+var unmutables:Dictionary[String,func_sig] = {
 	'print':func_sig.new('print','void',[],true),
 	'printt':func_sig.new('printt','void',[],true),
-	'printerr':func_sig.new('printerr','void',[],true)
-} 
+	'printerr':func_sig.new('printerr','void',[],true),
+	'Vector2':func_sig.new('Vector2','Vector2',[TYPE_FLOAT,TYPE_FLOAT]),
+	'Vector2i':func_sig.new('Vector2i','Vector2',[TYPE_INT,TYPE_INT]),
+	'add_child':func_sig.new('add_child','void',[TYPE_OBJECT]),
+}
+
+
+
 
 func make_error(st:String) -> void:
 	has_errors = true
@@ -69,7 +77,11 @@ func visit_code():
 	for sig in signatures.values():
 		if is_declared(sig.name): continue
 		sig.resolve() ; def_variable(sig)
-	
+
+	for sig in unmutables.values():
+		sig.resolve() ; current_scope[sig.name] = sig
+
+
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
 		#visit calls one of the cooresponding functions here
@@ -138,26 +150,29 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	
 	if stmt.is_constant and !init:
 		make_error('constants need initializers "%s"' % stmt.name)
-	
 	if init:
 		var init_type:Variant.Type = stmt.initializer.visit(self)
+		var temp_ref = null 
 		
-		if stmt.initializer is AST.member_Call: #assign .new manually :/
+		#need to assign .new manually :/
+		if stmt.initializer is AST.member_Call:
+			temp_ref = u_object.new('') #temporarily store data
 			var name = stmt.initializer.target.name
 			var member_call = stmt.initializer.member_name
-			if member_call == 'new' and !hint_valid:
-				ref.hint_n = name
-				ref.resolve_hint_as_class()
-				init_type = ref.hint
-			#theres probs a big downside to this aside from it being ugly
-			#but for now it works
-		
-		
-		if init_type == TYPE_MAX:
-			make_error('variable "%s" could not be assigned as its initializer is typed "void"' % ref.name)
+			if member_call == 'new':
+				temp_ref.hint_n = name
+				temp_ref.resolve_hint_as_class()
+				init_type = temp_ref.hint
 			
-		if ref.hint_n != '' and ref.hint != init_type:
+		
+		if init_type == TYPE_MAX || init_type == TYPE_NIL:
+			make_error('variable "%s" could not be assigned as its initializer is un-typed or void' % ref.name)
+			
+		if ref.hint_n != '' and ref.hint != init_type and !lang_utilities.can_convert(ref.hint,init_type):
 			make_error('variable "%s" doesnt match type hint -> %s' % [ref.name,ref.hint_n])
+		
+		#and then assign it if need be
+		if temp_ref != null: ref.hint_n = temp_ref.hint_n
 		
 		ref.hint = init_type
 	
@@ -316,7 +331,9 @@ func visit_assignment(expr:AST.assignment):
 			ref.hint = right
 			return right
 	
-	if left != right: make_error(errors.assign % [type_string(left),type_string(right)])
+	
+	if left != right and !lang_utilities.can_convert(left,right): 
+		make_error(errors.assign % [type_string(left),type_string(right)])
 	return right
 
 
@@ -527,7 +544,7 @@ class u_object:
 		var valid := true ; var i := 0
 		if params.size() != p_param.size(): return false
 		while i < params.size():
-			if params[i] != p_param[i] and params[i] != TYPE_MAX:
+			if params[i] != p_param[i] and params[i] != TYPE_MAX and !lang_utilities.can_convert(params[i],p_param[i]):
 				valid = false ; break
 			i += 1
 		return valid

@@ -1,5 +1,17 @@
 class_name lang_utilities ##utilities for manipulating code in strings
 
+##TODO, cleanup, ts is BLOATED with other stuff that i do not need anymore
+
+const interchangeable = [
+	[TYPE_INT,TYPE_FLOAT],
+	[TYPE_STRING,TYPE_STRING_NAME]
+]
+
+static func can_convert(type:Variant.Type,type_2:Variant.Type) -> bool:
+	for group in interchangeable:
+		if type in group and type_2 in group:
+			return true
+	return false
 
 static func get_family(ClassName:StringName) -> PackedStringArray:
 	if !ClassDB.class_exists(ClassName): 
@@ -197,9 +209,11 @@ static func scrub_whitespace(script_code:String) -> String:
 static func pack_AST(p_ast:compiler) -> String:
 	var packed:PackedStringArray = []
 	packed.append('extends %s' % p_ast.base_class)
-	if p_ast.class_n == '': p_ast.class_n = 's_%s' %  p_ast.globals.hash()
-	p_ast.class_n = p_ast.class_n.substr(0,50) ; var class_st = 'class_name %s' % p_ast.class_n
-	packed.append(class_st)
+	#p_ast.class_n = 's_%s' %  p_ast.globals.hash()
+	
+	if p_ast.class_n != '':
+		p_ast.class_n = p_ast.class_n.substr(0,50) ; var class_st = 'class_name %s' % p_ast.class_n
+		packed.append(class_st)
 	
 	
 	if !p_ast.contains_data(): return '\n'.join(packed)
