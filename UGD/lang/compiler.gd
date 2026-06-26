@@ -13,7 +13,8 @@ const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unimplemented':'%s call unimplemented'
+	'unimplemented':'%s call unimplemented',
+	'unresolved':'unresolved object, .new() requires an add_child at some point -> "%s" at function "%s"'
 }
 
 var current_fn:u_object = null
@@ -21,6 +22,7 @@ var current_fn:u_object = null
 var loop_depth = 0
 
 
+var unresolved_objects:Dictionary[String,String] = {}
 var scope:Array[Dictionary] = [{}]
 var jumped_scopes:Array[Dictionary]
 var jump_depth = 0
@@ -43,8 +45,6 @@ var unmutables:Dictionary[String,func_sig] = {
 	'Vector2i':func_sig.new('Vector2i','Vector2',[TYPE_INT,TYPE_INT]),
 	'add_child':func_sig.new('add_child','void',[TYPE_OBJECT]),
 }
-
-
 
 
 func make_error(st:String) -> void:
@@ -85,6 +85,15 @@ func visit_code():
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
 		#visit calls one of the cooresponding functions here
+	
+	
+	#debating on weather or not this should only report the first found unresolved (looks cleaner)
+	if unresolved_objects.is_empty(): return
+	
+	for current_unresolved in unresolved_objects.keys():
+		var func_name = unresolved_objects[current_unresolved]
+		make_error(errors.unresolved % [current_unresolved,func_name])
+	
 
 
 func def_scope(): scope.append({})
@@ -163,6 +172,7 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 				temp_ref.hint_n = name
 				temp_ref.resolve_hint_as_class()
 				init_type = temp_ref.hint
+				unresolved_objects[stmt.name] = current_fn.name
 			
 		
 		if init_type == TYPE_MAX || init_type == TYPE_NIL:
@@ -354,6 +364,8 @@ func visit_function_call(expr:AST.function_call):
 	var param_s = ref.params.size() ; var arg_s = expr.args.size()
 	var err = 'few' if param_s > arg_s else 'many'
 	
+
+	
 	if param_s != arg_s:
 		make_error('too %s arguments for call "%s"' % [err,name])
 		return TYPE_NIL
@@ -369,6 +381,12 @@ func visit_function_call(expr:AST.function_call):
 		var err_arr = [ref.name,u_object.format_param(ref.params),u_object.format_param(local_args)]
 		make_error(errors.call_param % err_arr)
 	
+	#this works because by this point its already done a 'does this even EXIST here' check
+	if ref.name == 'add_child': 
+		var object_name:String = expr.args[0].name
+		if object_name in unresolved_objects: 
+			unresolved_objects.erase(object_name)
+	
 	return ref.hint
 
 
@@ -383,12 +401,15 @@ func visit_for(stmt:AST.for_Statement):
 
 func visit_while(stmt:AST.while_Statement):
 	loop_depth += 1 
+	
+	if !is_assignable(stmt.condition,true):
+		make_error('expected assignable condition after while, got %s instead' % stmt.condition.get_type_name())
+		return TYPE_NIL
+	
 	stmt.condition.visit(self) ; def_scope()
 	for expression in stmt.body:expression.visit(self)
 	loop_depth -= 1 ; leave_scope()
 	return TYPE_NIL
-
-
 
 func visit_break(_stmt:AST.break_Statement):
 	if loop_depth == 0: make_error(errors.loop % 'break')

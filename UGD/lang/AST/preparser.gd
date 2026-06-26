@@ -454,7 +454,7 @@ func parse_expression(can_assign:=true) -> AST.Expr:
 	return parse_is(can_assign)
 
 func parse_is(can_assign):
-	var left = parse_or_expression(can_assign)
+	var left = parse_ternary_expression(can_assign)
 	if check(tk_type.IS):
 		advance()
 		var right = parse_primary()
