@@ -13,16 +13,16 @@ const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unimplemented':'%s call unimplemented',
-	'unresolved':'unresolved object, .new() requires an add_child() at some point -> "%s" at function "%s"'
+	'unimplemented':'"%s" call unimplemented',
+	'unresolved':'unresolved object, .new() requires an add_child() at some point -> "%s" at function "%s"',
+	'standalone':'Standalone expression (the line may have no effect) -> "%s',
 }
 
 var current_fn:u_object = null
+var current_v:u_object = null
 
 var loop_depth = 0
 
-
-var unresolved_objects:Dictionary[String,String] = {}
 var scope:Array[Dictionary] = [{}]
 var jumped_scopes:Array[Dictionary]
 var jump_depth = 0
@@ -92,15 +92,6 @@ func visit_code():
 		expression.visit(self) 
 		#visit calls one of the cooresponding functions here
 	
-	
-	#debating on weather or not this should only report the first found unresolved (looks cleaner)
-	if unresolved_objects.is_empty(): return
-	
-	for current_unresolved in unresolved_objects.keys():
-		var func_name = unresolved_objects[current_unresolved]
-		make_error(errors.unresolved % [current_unresolved,func_name])
-	
-
 
 func def_scope(): scope.append({})
 
@@ -169,8 +160,8 @@ func visit_header():
 
 	
 func visit_var_decl(stmt:AST.varDecl_Statement):
-	var ref = u_object.new(stmt.name,stmt)
-	var hint_valid = ref.resolve_hint(stmt.type_hint)
+	var ref = u_object.new(stmt.name,stmt) ; current_v = ref
+	var hint_valid = ref.resolve_hint(stmt.type_hint,true)
 	var init = stmt.initializer != null
 	
 	if !hint_valid and ref.hint_n != '':
@@ -180,19 +171,6 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 		make_error('constants need initializers "%s"' % stmt.name)
 	if init:
 		var init_type:Variant.Type = stmt.initializer.visit(self)
-		var temp_ref = null 
-		
-		#need to assign .new manually :/
-		if stmt.initializer is AST.member_Call:
-			temp_ref = u_object.new('') #temporarily store data
-			var name = stmt.initializer.target.name
-			var member_call = stmt.initializer.member_name
-			if member_call == 'new':
-				temp_ref.hint_n = name
-				temp_ref.resolve_hint_as_class()
-				init_type = temp_ref.hint
-				unresolved_objects[stmt.name] = current_fn.name
-			
 		
 		if init_type == TYPE_MAX || init_type == TYPE_NIL:
 			make_error('variable "%s" could not be assigned as its initializer is un-typed or void' % ref.name)
@@ -201,11 +179,12 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 			make_error('variable "%s" doesnt match type hint -> %s' % [ref.name,ref.hint_n])
 		
 		#and then assign it if need be
-		if temp_ref != null: ref.hint_n = temp_ref.hint_n
+		#if temp_ref != null: ref.hint_n = temp_ref.hint_n
 		
 		ref.hint = init_type
 	
 	def_variable(ref)
+	current_v = null
 	return ref
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
@@ -358,6 +337,7 @@ func visit_assignment(expr:AST.assignment):
 		
 		if ref.is_weak: #re-assign and return
 			ref.hint = right
+			ref.meta.clear()
 			return right
 	
 	
@@ -403,12 +383,11 @@ func visit_function_call(expr:AST.function_call):
 	if !ref.compare_params(local_args):
 		var err_arr = [ref.name,u_object.format_param(ref.params),u_object.format_param(local_args)]
 		make_error(errors.call_param % err_arr)
+		return TYPE_NIL
 	
-	#this works because by this point its already done a 'does this even EXIST here' check
-	if ref.name == 'add_child': 
-		var object_name:String = expr.args[0].name
-		if object_name in unresolved_objects: 
-			unresolved_objects.erase(object_name)
+	if ref.name == 'add_child':
+		make_error(errors.unimplemented % 'add_child')
+		return ref.hint
 	
 	return ref.hint
 
@@ -446,18 +425,55 @@ func visit_pass(_stmt:AST.pass_Statement):
 	return TYPE_NIL
 
 
-func visit_array(_expr:AST.array):
-	make_error(errors.unimplemented % 'array')
-	return TYPE_NIL
+func visit_array(expr:AST.array):
+	if current_v == null:  make_error(errors.standalone % 'array') ; return TYPE_ARRAY
+	
+	for index in expr.elements.size():
+		var data = expr.elements[index].visit(self)
+		current_v.meta[str(index)] = {
+			'element':data,
+			'raw':expr.elements[index]
+		}
+	return TYPE_ARRAY
 
-func visit_dictionary(_expr:AST.dictionary):
-	make_error(errors.unimplemented % 'dictionary')
-	return TYPE_NIL
+func visit_dictionary(expr:AST.dictionary):
+	if current_v == null:  make_error(errors.standalone % 'dictionary') ; return TYPE_DICTIONARY
+	for key in expr.elements.keys():
+		var element_visited = expr.elements[key].visit(self)
+		var key_data = key.visit(self) if key is AST.Expr else key
+		var key_code = key.get_code() if key is AST.Expr else key
+		
+		
+		current_v.meta[key_code] = {
+			'key':key_data,
+			'element':element_visited,
+			'raw':expr.elements[key]
+		}
+		
+	return TYPE_DICTIONARY
+#this begs the question? why did the dictionary choose key over the bread?
+
+func visit_index(expr:AST.index):
+	var target = expr.target.visit(self)
+	var index = expr.idx.get_code()
+	if !(target in [TYPE_DICTIONARY,TYPE_ARRAY]):
+		make_error('Cannot use subscript operator on a base of type "%s"' % type_string(target))
+		return TYPE_NIL
+	
+	if !(expr.target is AST.variable):
+		make_error('index target needs to be a variable' % type_string(target))
+		return TYPE_NIL
+	
+	var name = expr.target.name
+	var ref:u_object = get_reference(name)
+	var from_meta = ref.meta.get(index,null)
+	if from_meta == null:
+		make_error('cannot get index "%s" on base of %s' % [expr.idx.get_code(),name])
+		return TYPE_NIL
+	
+	return from_meta.element
 
 
-func visit_index(_expr:AST.index):
-	make_error(errors.unimplemented % 'index')
-	return TYPE_NIL
 
 func visit_member_call(stmt:AST.member_Call):
 	if !(stmt.target is AST.variable):
@@ -465,24 +481,24 @@ func visit_member_call(stmt:AST.member_Call):
 		return TYPE_NIL
 	
 	var member = stmt.member_name; var name = stmt.target.name
+	
 	var ref:u_object = get_reference(name)
+	
 	if ref == null:
 		ref = u_object.new(name) ; ref.hint_n = name
 		if !ref.resolve_hint_as_class(): 
-			make_error('cannot resolve name "%s" as a class or variable in this scope' % ref.name)
 			return TYPE_NIL
-			#only allowing node's to be instanced member wise
-			#forces direct references i.e
-			#'x = Node.new()' ; rather than allowing 'x = Node'
-	
-	
+		
+		if member == 'new':
+			make_error(errors.unimplemented % 'new')
+			return ref.hint
+		
 	var data = ref.get_virtual_data(member,stmt.is_property)
 	if data.is_empty(): 
 		make_error('property/method "%s" does not exist in -> "%s"' % [member,ref.name])
 		return TYPE_NIL
 	
 	var return_type = TYPE_NIL
-	
 	
 	if data.has('return'): return_type = data['return']['type']
 	elif data.has('type'): return_type = data['type']
@@ -521,10 +537,9 @@ class u_object:
 	
 	var resolved := false
 	
-	var is_classed := false
+	#var is_classed := false
 	
 	var meta := {}
-	
 	
 	func _init(p_name:String,expr:AST.Expr = null) -> void:
 		name = p_name
@@ -533,8 +548,8 @@ class u_object:
 	func is_resolved(): return resolved
 	func resolve(): resolved = true
 	
-	##only resolves built in types, so custom classes shouldn't work
-	func resolve_hint(tk_hint:TOKENS.token) -> bool:
+	
+	func resolve_hint(tk_hint:TOKENS.token,allow_classes = false) -> bool:
 		var valid := true
 		var hint_st := lang_utilities.get_type_hint(tk_hint)
 		var resolved_tk:Variant.Type = lang_utilities.get_builtin_type(hint_st)
@@ -545,18 +560,21 @@ class u_object:
 		
 		hint = resolved_tk
 		hint_n = hint_st
+		
+		if !valid and allow_classes: 
+			valid = resolve_hint_as_class()
+		
 		return valid
 	
 	
 	func resolve_hint_as_class() -> bool:
-		var n_is_class = ClassDB.class_exists(hint_n)
-		if !n_is_class: 
-			printerr('cannot resolve %s as a valid class' % hint_n)
+		var n_is_class = lang_utilities.is_class_or_type(hint_n,false,false)
+		#lang_utilities.get_base_class(hint_n)
+		if !n_is_class || !ClassDB.can_instantiate(hint_n): 
+			printerr('cannot resolve "%s" as a valid class' % hint_n)
 			return false
-		
-		#jank maybe ???? idkkkk, this might always resolve as TYPE_OBJECT
-		hint = typeof(ClassDB.instantiate(hint_n)) as Variant.Type
-		hint_n = hint_n
+		#im pretty sure if it can be instanced its an object!!
+		hint = TYPE_OBJECT
 		return true
 	
 	#just straight bullshitting so i dont need two functions for this (like the old version)
@@ -607,3 +625,11 @@ class func_sig extends u_object:
 	##returns function as 'func_name(param_type) -> return_type'
 	func sig_string() -> String:
 		return '%s(%s) -> %s' % [name,format_param(params),hint_n]
+
+#
+#class type_container:
+	#var type:Variant.Type
+	#var ref:u_object
+	#
+	#func _init(p_type:Variant.Type):
+		#type = p_type

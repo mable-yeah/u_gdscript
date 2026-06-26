@@ -122,6 +122,7 @@ class index extends Expr:
 	var target:Expr
 	var idx:Expr
 	
+	
 	func _init(p_target:Expr,p_ind:Expr) -> void:
 		type = loader_lang.Type.INDEX
 		target = p_target 
@@ -429,31 +430,3 @@ class PROGRAM:
 	##returns if functions/variables are declared yet / used for header stuff
 	func contains_data():
 		return globals.size() + functions.size() + misc.size() > 0
-
-
-
-
-
-
-#Expr
-#array
-#assignment
-#break_Statement
-#cont_Statement
-#dictionary
-#enumerator
-#expression_Statement
-#for_Statement
-#funcDecl_Statement
-#function_call
-#if_Statement
-#index
-#literal
-#member_Call
-#pass_Statement
-#return_Statement
-#ternary
-#unary
-#varDecl_Statement
-#variable
-#while_Statement
