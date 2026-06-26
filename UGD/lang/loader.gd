@@ -32,6 +32,7 @@ static func load_string(code:String,className:String) -> Variant:
 ##packs the given string as a node
 ##WARNING this doesn't error handle the code itself, thats what load_string() is for
 static func pack_string_as_node(code:String,p_class:String) -> Variant:
+	p_class = lang_utilities.get_base_class(p_class)
 	var node:Object = ClassDB.instantiate(p_class)
 	var sha = code.sha1_text()
 	if code == '' || node == null: return null

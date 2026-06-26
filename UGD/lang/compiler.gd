@@ -14,7 +14,7 @@ const errors = {
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
 	'unimplemented':'%s call unimplemented',
-	'unresolved':'unresolved object, .new() requires an add_child at some point -> "%s" at function "%s"'
+	'unresolved':'unresolved object, .new() requires an add_child() at some point -> "%s" at function "%s"'
 }
 
 var current_fn:u_object = null
@@ -33,7 +33,15 @@ var current_scope:Dictionary:
 
 var has_errors := false
 var code:String = ''
+
+var object_class:String = ''
 var base_class:String = ''
+
+#'extends example class_name test'
+#object class becomes 'example'
+#base class becomes 'Node' (assuming example extends node)
+
+
 
 var signatures:Dictionary[String,func_sig] = {}
 
@@ -43,7 +51,6 @@ var unmutables:Dictionary[String,func_sig] = {
 	'printerr':func_sig.new('printerr','void',[],true),
 	'Vector2':func_sig.new('Vector2','Vector2',[TYPE_FLOAT,TYPE_FLOAT]),
 	'Vector2i':func_sig.new('Vector2i','Vector2',[TYPE_INT,TYPE_INT]),
-	'add_child':func_sig.new('add_child','void',[TYPE_OBJECT]),
 }
 
 
@@ -54,7 +61,7 @@ func make_error(st:String) -> void:
 
 
 func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
-	base_class = base_className
+	object_class = base_className
 	self.class_n =  p_ast.class_n
 	self.extends_n = p_ast.extends_n
 	self.globals = p_ast.globals
@@ -66,8 +73,7 @@ func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	print_rich('[color=green]%s[/color]' % code)
 
 func visit_code():
-	signatures.merge(register_class(base_class))
-	if class_n != '': visit_header()
+	visit_header()
 	if !contains_data() || has_errors: return
 	
 	for stmt in functions:
@@ -145,10 +151,23 @@ func is_assignable(expr:AST.Expr,literal_allowed = true) -> bool:
 
 
 func visit_header():
-	if !shadows_declared(class_n): return
-	make_error('class name "%s", shadows an internal class/variable' % class_n)
+	if !lang_utilities.is_class_or_type(object_class,false,true):
+		make_error('ugd could not initialize, class type is invalid -> "%s"' % object_class)
+		return
+	
+	base_class = lang_utilities.get_base_class(object_class)
+	
+	if lang_utilities.inheritence(base_class,'Node'):
+		unmutables['add_child'] = func_sig.new('add_child','void',[TYPE_OBJECT])
+	
+	signatures.merge(register_class(object_class))
+	
+	if class_n != '':
+		if !shadows_declared(class_n): return
+		make_error('class name "%s", shadows an internal class/variable' % class_n)
+	
 
-
+	
 func visit_var_decl(stmt:AST.varDecl_Statement):
 	var ref = u_object.new(stmt.name,stmt)
 	var hint_valid = ref.resolve_hint(stmt.type_hint)
@@ -357,14 +376,18 @@ func visit_function_call(expr:AST.function_call):
 	
 	if !ref.is_resolved():
 		ref.ast_expr.visit(self)
-	
+
+
 	#varadic functions generally dont follow any typing througout
-	if ref.varadic: return ref.hint 
+	#but still visit the arguments to confirm they exist in the first place
+	if ref.varadic: 
+		for arg in expr.args: arg.visit(self)
+		return ref.hint 
 	
 	var param_s = ref.params.size() ; var arg_s = expr.args.size()
 	var err = 'few' if param_s > arg_s else 'many'
 	
-
+	
 	
 	if param_s != arg_s:
 		make_error('too %s arguments for call "%s"' % [err,name])
@@ -476,7 +499,6 @@ func register_class(p_class:String) -> Dictionary[String,func_sig]:
 		
 		if type == 'Nil': type = 'void'
 		for arg in method.args: arguments.append(arg.type)
-		
 		registry[method.name] = func_sig.new(method.name,type,arguments,false)
 	return registry
 

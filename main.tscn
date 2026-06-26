@@ -14,11 +14,12 @@ func _ready() -> void:
 	)
 func _parse():
 	free_scripted_object()
-	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'Node')
-	if scripted_object != null: 
-		add_child(scripted_object)
+	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'scripted_example')
+	if scripted_object != null:
+		if scripted_object is Node:
+			add_child(scripted_object)
 		$HSplitContainer/RichTextLabel.text = scripted_object.get_script().get_source_code()
-
+	
 
 
 var mem = '%s / %s'
@@ -32,7 +33,10 @@ func _process(_delta: float) -> void:
 func free_scripted_object():
 	if scripted_object == null: return
 	scripted_object.set_script(null)
-	scripted_object.free()
+	if scripted_object is RefCounted:
+		scripted_object = null  
+	else:
+		scripted_object.free()
 "
 
 [node name="main" type="Control"]

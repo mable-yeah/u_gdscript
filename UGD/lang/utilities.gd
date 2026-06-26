@@ -13,12 +13,6 @@ static func can_convert(type:Variant.Type,type_2:Variant.Type) -> bool:
 			return true
 	return false
 
-static func get_family(ClassName:StringName) -> PackedStringArray:
-	if !ClassDB.class_exists(ClassName): 
-		printerr('could not get family from %s as that class is invalid' % ClassName)
-		return []
-	return ClassDB.get_inheriters_from_class(ClassName)
-
 
 static func inheritence(ClassName:StringName,inherits:StringName):
 	if !ClassDB.class_exists(ClassName): return ClassName == inherits
@@ -71,52 +65,35 @@ static func get_op_st(op:loader_lang.Operation) -> String:
 
 
 static func get_class_methods(name:String):
-	if !lang_utilities.is_class_or_type(name,true,true):
+	if !is_class_or_type(name,true,true):
 		return [{}]
 	
-	if ClassDB.class_exists(name): #is an actual class
-		return ClassDB.class_get_method_list(name)
-	else: #everything else
-		if is_builtin(name): name = 'ugd_%s' % name
-		for c in ProjectSettings.get_global_class_list():
-			if c['class'] != name: continue
-			var script = load(c['path'])
-			var instance = ClassDB.instantiate(c['base'])
-			instance.set_script(script)
-			return get_methods(instance)
-
-
-##returns an Array[Dictionary] formatted identically to the built in get_method_list
-static func get_methods(value:Object,include_builtins := false) -> Array[Dictionary]:
-	var methods:Array[Dictionary] ; var script:Script = value.get_script()
-	if value == null:  printerr('from get_methods: invalid value') ; return methods
-	if script == null: printerr('from get_methods: object may lack a script') ; return methods
+	var base_class = get_base_class(name)
+	var method_list = ClassDB.class_get_method_list(base_class)
+	if base_class == name: return method_list
+	for class_list in ProjectSettings.get_global_class_list():
+		if class_list['class'] != name: continue
+		
+		var script = load(class_list['path'])
+		method_list.append_array(script.get_script_method_list())
+		return method_list
 	
-	#methods.append_array(GDScript.new().get_method_list())
-	if include_builtins: methods.append_array(value.get_method_list())
-	methods.append_array(script.get_script_method_list())
-	return methods
+	printerr('could not get globally declared class methods %s' % name)
+	return [{}]
 
 
-##gives a method in a dictionary
-static func this_method(method_name:String,class_n:String) -> Dictionary:
-	var list = lang_utilities.get_class_methods(class_n)
-	for method in list:
-		if method['name'] == method_name:
-			return method
-	return {}
 
-
-static func get_propertys(value:Object,include_builtins := false) -> Array[Dictionary]:
-	var methods:Array[Dictionary] ; var script:Script = value.get_script()
-	if value == null:  printerr('from get_propertys: invalid value') ; return methods
-	if script == null: printerr('from get_propertys: object may lack a script') ; return methods
+static func get_base_class(class_n:String) -> String:
+	var class_list = loader_lang.class_list
+	if class_list.has(class_n):
+		return class_n
 	
-	if include_builtins: methods.append_array(value.get_property_list())
-	methods.append_array(script.get_script_property_list())
-	return methods
-
-
+	for class_data in ProjectSettings.get_global_class_list():
+		if class_data['class'] != class_n: continue
+		return class_data['base']
+	
+	printerr('could not get base class type of %s, this class may not exist or be registered' % class_n)
+	return ''
 
 ##return's true if string matches a class type or builtin type
 static func is_class_or_type(st:String,allow_type:=true,global_classes:=false) -> bool:
@@ -127,17 +104,6 @@ static func is_class_or_type(st:String,allow_type:=true,global_classes:=false) -
 		return t != TYPE_MAX || class_list.has(st)
 	return class_list.has(st)
 
-
-##return from all available classes and global classes (and types)
-static func get_class_or_type(st:String) -> Variant:
-	var t = get_builtin_type(st)
-	if t != TYPE_MAX:
-		return t
-	
-	if loader_lang.class_list.has(st):
-		return loader_lang.class_list.find(st)
-	
-	return -1
 
 ##'float' -> TYPE_FLOAT
 static func get_builtin_type(st_type:String) -> Variant.Type:
@@ -208,8 +174,7 @@ static func scrub_whitespace(script_code:String) -> String:
 
 static func pack_AST(p_ast:compiler) -> String:
 	var packed:PackedStringArray = []
-	packed.append('extends %s' % p_ast.base_class)
-	#p_ast.class_n = 's_%s' %  p_ast.globals.hash()
+	packed.append('extends %s' % p_ast.object_class)
 	
 	if p_ast.class_n != '':
 		p_ast.class_n = p_ast.class_n.substr(0,50) ; var class_st = 'class_name %s' % p_ast.class_n
