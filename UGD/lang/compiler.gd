@@ -559,8 +559,6 @@ class u_object:
 	
 	var resolved := false
 	
-	#var is_classed := false
-	
 	var meta := {}
 	
 	func _init(p_name:String,expr:AST.Expr = null) -> void:

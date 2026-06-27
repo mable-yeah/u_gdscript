@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://dt575dsc83a4b"]
+[gd_scene load_steps=3 format=3 uid="uid://dt575dsc83a4b"]
 
 [sub_resource type="GDScript" id="GDScript_7dm0k"]
 script/source = "extends Control
@@ -9,12 +9,15 @@ func _ready() -> void:
 	$parse.pressed.connect(_parse)
 	$reload.pressed.connect(
 		func():
+			script_loader.empty_cache()
 			free_scripted_object()
 			get_tree().change_scene_to_file(\"res://main.tscn\")
 	)
+	
+
 func _parse():
 	free_scripted_object()
-	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'scripted_example')
+	scripted_object = script_loader.load_string($HSplitContainer/CodeEdit.text,'scripted_example',true)
 	if scripted_object != null:
 		if scripted_object is Node:
 			add_child(scripted_object)
@@ -37,6 +40,35 @@ func free_scripted_object():
 		scripted_object = null  
 	else:
 		scripted_object.free()
+"
+
+[sub_resource type="GDScript" id="GDScript_ig7tw"]
+script/source = "extends TextEdit
+
+
+func _gui_input(_event: InputEvent) -> void:
+	if Input.is_action_just_pressed('comment'): 
+		accept_event() ; comment() 
+	
+
+
+func comment() -> void:
+	if has_selection():
+		var selection = get_line_ranges_from_carets()
+		for caret in selection:
+			for idx in range(caret.x,caret.y + 1):
+				comment_line(idx)
+		return
+	for caret in get_sorted_carets():
+		var idx = get_caret_line(caret) ; comment_line(idx)
+
+
+func comment_line(idx) -> void:
+	var line = get_line(idx)
+	var has_comment = line.begins_with('#')
+	line = line.remove_chars('#') if has_comment else '#%s' % line
+	set_line(idx,line)
+	set_caret_column(2 if !has_comment else 0)
 "
 
 [node name="main" type="Control"]
@@ -109,3 +141,4 @@ minimap_draw = true
 draw_control_chars = true
 draw_tabs = true
 draw_spaces = true
+script = SubResource("GDScript_ig7tw")

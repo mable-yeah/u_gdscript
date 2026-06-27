@@ -1,14 +1,13 @@
 class_name script_loader
 
-
-static var scripts:Dictionary[String,GDScript] = {}
+static var sha_cache:Dictionary[String,GDScript] = {}
 
 const err = {
 	STOPPED_AT = 'UGD scripting stopped at %s .',
 	CRITICAL = 'ugd critical script error, %s'
 }
 
-static func load_string(code:String,className:String) -> Variant:
+static func load_string(code:String,className:String,cache:bool = false) -> Variant:
 	code = lang_utilities.scrub_comments_C(code)
 	
 	var p_lexer = lexer.new(code)
@@ -24,41 +23,32 @@ static func load_string(code:String,className:String) -> Variant:
 	if p_compiler.has_errors:
 		printerr(err.STOPPED_AT % 'Compiler') ; return null
 	
-	#return null
-	return pack_string_as_node(p_compiler.code,className)
+	return pack_string_as_node(p_compiler.code,className,cache)
 
 
 
 ##packs the given string as a node
-##WARNING this doesn't error handle the code itself, thats what load_string() is for
-static func pack_string_as_node(code:String,p_class:String) -> Variant:
+##WARNING this only throws an error if code seriously goes wrong 
+##(something that cant be caught through the loader steps)
+static func pack_string_as_node(code:String,p_class:String,cache:bool = false) -> Variant:
 	p_class = lang_utilities.get_base_class(p_class)
 	var node:Object = ClassDB.instantiate(p_class)
 	var sha = code.sha1_text()
 	if code == '' || node == null: return null
 	
-	if scripts.has(sha): node.set_script(scripts[sha]) ; return node
+	if sha in sha_cache and cache:
+		node.set_script(sha_cache[sha]) ; return node
 	
-	var script = GDScript.new()
-	script.set_source_code(code)
-	var err_script = script.reload()
+	var script = GDScript.new() ; script.set_source_code(code)
+	var err_script = script.reload() ; script.unreference() 
+	#godot keeps a spere ref in reload(), so just unref it
 	
-	
-	###ok i lied it DOES error check but only for super serious things that pass every thing else
-	##also its not very discriptive when it does check
 	if err_script != OK: 
 		var msg = err.CRITICAL % error_string(err_script)
 		OS.alert(msg) ; OS.crash(msg)
-
+		return null
+	if cache: sha_cache[sha] = script
 	node.set_script(script)
-	scripts[sha] = script
 	return node
 
-#NOTE: keeping scripts cached 
-#(especially ones that arent being reloaded with new code constantly like in the example scene), 
-#is actually better than clearing it when reloading a scene!
-#as an internal reference to a script is always kept if it ends up being used anywhere
-#I THINK, thats just a theory though
-#so basicawwy just clear the node on reload and keep the cache
-static func clear_scripts():
-	scripts.clear()
+static func empty_cache() -> void: sha_cache.clear()
