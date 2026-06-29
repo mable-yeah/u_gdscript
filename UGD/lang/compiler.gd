@@ -5,7 +5,6 @@ const errors = {
 	'call_param':'a function call parameter of "%s" does not match its expected signature, expected "%s" got "%s"',
 	'signature':'function "%s" does not match its parent signature, "%s"',
 	'invalid_hint':'could not find type -> "%s"',
-	'builtin':'Builtin type cannot be used as a name on its own -> "%s"',
 	'unreachable':'unreachable code found in function "%s" after return',
 	'func':'a function typed "%s" cannot return -> "%s"',
 	'expected':'expected "%s" got -> "%s" instead in %s',
@@ -13,9 +12,10 @@ const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unimplemented':'"%s" call unimplemented',
 	'unresolved':'unresolved/ophan object found, .new() -> "%s" in function "%s"',
 	'standalone':'Standalone expression (the line may have no effect) -> "%s',
+	'object_assign':'value of type "%s" cannot be assigned to a variable of type "%s"',
+	'unimplemented':'"%s" call unimplemented',
 }
 
 var current_fn:u_object = null
@@ -71,7 +71,6 @@ func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	visit_code()
 	if has_errors: return
 	code = lang_utilities.pack_AST(self)
-	#print_rich('[color=green]%s[/color]' % code)
 
 func visit_code():
 	visit_header()
@@ -182,16 +181,23 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 		make_error('constants need initializers "%s"' % stmt.name)
 	if init:
 		var init_type:u_type = stmt.initializer.visit(self)
+		var init_object = init_type.meta.get('object_type',type_string_(init_type.type))
 		
 		if init_type.type == TYPE_MAX || init_type.type == TYPE_NIL:
 			make_error('variable "%s" could not be assigned as its initializer is un-typed or void' % ref.name)
 		
-		
 		if ref.hint_n != '' and ref.hint.type != init_type.type and !lang_utilities.can_convert(ref.hint.type,init_type.type):
-			make_error('variable "%s" doesnt match type hint -> %s' % [ref.name,ref.hint_n])
+			make_error('variable "%s" doesnt match type hint -> %s, got %s' % [ref.name,ref.hint_n,type_string_(init_type.type)])
 		
-		ref.hint_n = init_type.meta.get('object_type',type_string(init_type.type))
+		if ref.hint_n != init_object and ref.hint.type == TYPE_OBJECT:
+			make_error('variable "%s" doesnt match type hint -> %s, got %s' % [ref.name,ref.hint_n,init_object])
+		
+		ref.hint_n = init_object
 		ref.hint = init_type
+	elif ref.hint_n != '':
+		if ref.hint.type == TYPE_OBJECT:
+			ref.hint.meta['object_type'] = ref.hint_n
+		#need to assign metadata for laterrr
 	
 	def_variable(ref)
 	current_v = null
@@ -240,18 +246,18 @@ func visit_return(stmt:AST.return_Statement) -> u_type:
 	if ref == null: return utype(TYPE_NIL)
 	
 	#hint exists and is void AND a return expression exists
-	if ref.hint_n and ref.hint == TYPE_MAX and expr_exists:
-		make_error(errors.func % ['void', type_string(expr_hint.type)])
+	if ref.hint_n and ref.hint.type == TYPE_MAX and expr_exists:
+		make_error(errors.func % ['void', type_string_(expr_hint.type)])
 		return utype(TYPE_NIL)
 	
 	#hint exists but expression doesnt
 	if !expr_exists: 
-		if ref.hint_n != '': make_error(errors.func % [ref.hint_n, type_string(TYPE_NIL)])
+		if ref.hint_n != '': make_error(errors.func % [ref.hint_n, type_string_(TYPE_NIL)])
 		return utype(TYPE_NIL)
 	
 	#hint exists but expression doesnt match it
-	if ref.hint_n != '' and ref.hint != expr_hint:
-		make_error(errors.func % [ref.hint_n, type_string(expr_hint.type)])
+	if ref.hint_n != '' and ref.hint.type != expr_hint.type:
+		make_error(errors.func % [ref.hint_n, type_string_(expr_hint.type)])
 		return utype(TYPE_NIL)
 	
 	return ref.hint
@@ -293,8 +299,8 @@ func visit_ternary(expr:AST.ternary) -> u_type:
 	var left = expr.left.visit(self) 
 	var right = expr.right.visit(self)
 	
-	if left != TYPE_BOOL: make_error(errors.expected % ['boolean',type_string(left.type),'ternary'])
-	if target != right: make_error(errors.ternary % [type_string(target.type),type_string(right.type)])
+	if left != TYPE_BOOL: make_error(errors.expected % ['boolean',type_string_(left.type),'ternary'])
+	if target != right: make_error(errors.ternary % [type_string_(target.type),type_string_(right.type)])
 	return target
 
 func visit_is(expr:AST.is_statement) -> u_type:
@@ -323,8 +329,6 @@ func visit_if(stmt:AST.if_Statement) -> u_type:
 
 
 
-
-
 func visit_assignment(expr:AST.assignment) -> u_type:
 	var literal_allowed = !(expr.op == loader_lang.Operation.OP_LOGIC_EQUAL)
 	if !is_assignable(expr.left,literal_allowed): 
@@ -336,6 +340,10 @@ func visit_assignment(expr:AST.assignment) -> u_type:
 	
 	var right = expr.right.visit(self)
 	var left = expr.left.visit(self)
+	
+	var left_obj = left.meta.get('object_type')
+	var right_obj = right.meta.get('object_type')
+	
 	
 	if right.type in [TYPE_MAX,TYPE_NIL]:
 		make_error('cannot assign a functions result, if the function is un-typed or void')
@@ -351,7 +359,10 @@ func visit_assignment(expr:AST.assignment) -> u_type:
 	
 	
 	if left.type != right.type and !lang_utilities.can_convert(left.type,right.type):
-		make_error(errors.assign % [type_string(left.type),type_string(right.type)])
+		make_error(errors.assign % [type_string_(left.type),type_string_(right.type)])
+	elif left_obj != right_obj:
+		make_error(errors.object_assign % [right_obj,left_obj])
+	
 	return right
 
 
@@ -404,6 +415,9 @@ func visit_function_call(expr:AST.function_call) -> u_type:
 		meta['orphaned'] = false
 		orphaned.erase(meta_visit)
 		return ref.hint
+	
+	if ref.hint.type == TYPE_OBJECT:
+		ref.hint.meta['object_type'] = ref.hint_n
 	
 	return ref.hint
 
@@ -471,11 +485,11 @@ func visit_index(expr:AST.index) -> u_type:
 	var target = expr.target.visit(self)
 	var index = expr.idx.get_code()
 	if !(target.type in [TYPE_DICTIONARY,TYPE_ARRAY]):
-		make_error('Cannot use subscript operator on a base of type "%s"' % type_string(target.type))
+		make_error('Cannot use subscript operator on a base of type "%s"' % type_string_(target.type))
 		return utype(TYPE_NIL)
 	
 	if !(expr.target is AST.variable):
-		make_error('index target needs to be a variable' % type_string(target.type))
+		make_error('index target needs to be a variable' % type_string_(target.type))
 		return utype(TYPE_NIL)
 	
 	var name = expr.target.name
@@ -490,13 +504,11 @@ func visit_index(expr:AST.index) -> u_type:
 
 
 func visit_member_call(stmt:AST.member_Call) -> u_type:
-	
 	var target_is_var = stmt.target is AST.variable
 	var target_visited = null if target_is_var else stmt.target.visit(self) 
 	var name:String = stmt.target.name if target_is_var else target_visited.meta.get('object_type','')
 	var ref:u_object = get_reference(name) if target_is_var else null
 	var member = stmt.member_name
-	
 	
 	if has_errors: return ref.hint if ref != null else utype(TYPE_NIL)
 	
@@ -504,6 +516,7 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 		ref = u_object.new(name) ; ref.hint_n = name
 		if !ref.resolve_hint_as_class(): 
 			return utype(TYPE_NIL)
+		
 		
 		if member == 'new':
 			ref.hint.meta = {
@@ -515,9 +528,8 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 			return ref.hint
 	
 	var data = ref.get_virtual_data(member,stmt.is_property)
-	
 	if data.is_empty(): 
-		make_error('property/method "%s" does not exist in -> "%s"' % [member,ref.name])
+		make_error('property/method "%s" does not exist in -> "%s" on base of "%s"' % [member,ref.name,ref.hint_n])
 		return utype(TYPE_NIL)
 	
 	var return_type = TYPE_NIL
@@ -526,6 +538,10 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	elif data.has('type'): return_type = data['type']
 	return utype(return_type)
 
+func type_string_(type) -> String:
+	if type is Variant.Type and type != TYPE_MAX:
+		return type_string(type)
+	return '<null>'
 
 
 func register_class(p_class:String) -> Dictionary[String,func_sig]:
@@ -533,7 +549,8 @@ func register_class(p_class:String) -> Dictionary[String,func_sig]:
 	var class_methods = lang_utilities.get_class_methods(p_class)
 	for method in class_methods:
 		var arguments:Array[u_type] = []
-		var type = type_string(method.return.type)
+		var hint = method.return.class_name
+		var type = type_string_(method.return.type) if hint.is_empty() else hint
 		
 		if type == 'Nil': type = 'void'
 		for arg in method.args: arguments.append(utype(arg.type))
@@ -569,26 +586,36 @@ class u_object:
 	func resolve(): resolved = true
 	
 	
-	func resolve_hint(tk_hint:TOKENS.token,allow_classes = false) -> bool:
+	func resolve_hint(tk_hint:TOKENS.token = null,allow_classes = false) -> bool:
 		var valid := true
 		var hint_st := lang_utilities.get_type_hint(tk_hint)
+		valid = resolve_hint_name(hint_st if tk_hint != null else hint_n)
+		if !valid and allow_classes:
+			valid = resolve_hint_as_class()
+		return valid
+	
+	func resolve_hint_name(hint_st := hint_n):
+		var valid := true
 		var resolved_tk:Variant.Type = lang_utilities.get_builtin_type(hint_st)
-		
 		if resolved_tk == TYPE_MAX and hint_st != '':
-			if hint_st != 'void': valid = false
-			else: hint = utype(TYPE_NIL)
+			if hint_st != 'void':
+				valid = false
+			else: 
+				hint = utype(TYPE_NIL)
 		
 		hint = utype(resolved_tk)
 		hint_n = hint_st
 		
-		if !valid and allow_classes: 
-			valid = resolve_hint_as_class()
 		return valid
-	
 	
 	func resolve_hint_as_class() -> bool:
 		var n_is_class = lang_utilities.is_class_or_type(hint_n,false,false)
-		if !n_is_class || !ClassDB.can_instantiate(hint_n): 
+		
+		if !n_is_class: 
+			if ClassDB.class_exists(hint_n): 
+				if !ClassDB.can_instantiate(hint_n): return false
+			else:
+				return false
 			printerr('cannot resolve "%s" as a valid class' % hint_n)
 			return false
 		#im pretty sure if it can be instanced its an object!!
@@ -604,6 +631,8 @@ class u_object:
 		
 		to_append = ClassDB.class_get_property_list('GDScript') if is_property\
 		else ClassDB.class_get_method_list('GDScript')
+		
+		if is_property: list.append_array(ClassDB.class_get_signal_list(hint_n))
 		
 		list.append_array(to_append)
 		for virtual in list:
@@ -623,7 +652,9 @@ class u_object:
 		var valid := true ; var i := 0
 		if params.size() != p_param.size(): return false
 		while i < params.size():
-			if params[i].type != p_param[i].type and params[i].type != TYPE_MAX and !lang_utilities.can_convert(params[i].type,p_param[i].type):
+			var left_param = params[i].type ; var right_param = p_param[i].type
+			var is_valid = left_param != right_param and left_param != TYPE_MAX
+			if is_valid and !lang_utilities.can_convert(left_param,right_param):
 				valid = false ; break
 			i += 1
 		return valid
@@ -641,8 +672,8 @@ class u_object:
 #this helps with defining abstract/placeholder functions
 class func_sig extends u_object:
 	func _init(p_name:String,type_hint:String,p_param:Array[u_type],p_varadic = false) -> void:
-		name = p_name ; params = p_param ; varadic = p_varadic
-		resolve_hint(TOKENS.create_token(TOKENS.type.IDENTIFIER,type_hint))
+		name = p_name ; params = p_param ; varadic = p_varadic ; hint_n = type_hint
+		resolve_hint(null,true)
 	
 	##returns function as 'func_name(param_type) -> return_type'
 	func sig_string() -> String:
