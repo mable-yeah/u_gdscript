@@ -669,16 +669,22 @@ func parse_primary() -> AST.Expr:
 			if expr.style == style.NONE:
 				return null
 			
-			check_token = tk_type.EQUAL if expr.style == style.PYTHON_DICT else tk_type.COLON
+			check_token = tk_type.EQUAL if expr.style != style.PYTHON_DICT else tk_type.COLON
 			
 			if expr.style == style.LUA_TABLE:
-				if key.type != loader_lang.Type.IDENTIFIER and key.type != loader_lang.Type.LITERAL:
-					make_error('expected identifier or string as Lua-style dictionary key, got %s' % expr.get_type_name())
-					return null
+				var is_literal =  key.type == loader_lang.Type.LITERAL
+				var err = 'expected identifier or string as Lua-style dictionary key, got %s' % key.get_type_name()
+				if key.type != loader_lang.Type.IDENTIFIER and !is_literal:
+					make_error(err) ; return null
+				if is_literal and key.literal_type != TYPE_STRING:
+					make_error(err) ; return null
+				
 				key.reduced_value = key.name \
 				if key.type == loader_lang.Type.IDENTIFIER else str(key.variant)
 				#this all helps with grabbing proper key names inside of lua tables :p
 				#however python styling doesnt follow these rules
+			
+			
 			
 			consume(check_token,'expected "%s" after dictionary key, mixing types is not allowed' %tk_type.keys()[check_token])
 			

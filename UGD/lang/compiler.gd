@@ -12,8 +12,8 @@ const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unresolved':'unresolved/ophan object found, .new() -> "%s" in function "%s"',
-	'standalone':'Standalone expression (the line may have no effect) -> "%s',
+	'unresolved':'unresolved/orphan object found, .new() -> "%s" in function "%s"',
+	'standalone':'Standalone expression (the line may have no effect) -> "%s"',
 	'object_assign':'value of type "%s" cannot be assigned to a variable of type "%s"',
 	'unimplemented':'"%s" call unimplemented',
 }
@@ -52,6 +52,10 @@ var unmutables:Dictionary[String,func_sig] = {
 	'printerr':func_sig.new('printerr','void',[],true),
 	'Vector2':func_sig.new('Vector2','Vector2',[utype(TYPE_FLOAT),utype(TYPE_FLOAT)]),
 	'Vector2i':func_sig.new('Vector2i','Vector2',[utype(TYPE_INT),utype(TYPE_INT)]),
+	'Color':func_sig.new('Color','Color',[utype(TYPE_FLOAT),utype(TYPE_FLOAT),utype(TYPE_FLOAT),utype(TYPE_FLOAT)]),
+	'randf':func_sig.new('randf','float',[],false),
+	'randi':func_sig.new('randi','int',[],false),
+	'range':func_sig.new('range','Array',[utype(TYPE_INT),utype(TYPE_INT)],false),
 }
 
 
@@ -93,7 +97,6 @@ func visit_code():
 		##visit calls one of the cooresponding functions here
 	
 	
-	
 	if orphaned.is_empty(): return
 	for unresolved:u_type in orphaned.keys():
 		var info = [\
@@ -122,7 +125,6 @@ func append_jumps():
 func scope_range(): return range(scope.size() - 1, -1, -1)
 
 
-
 func def_variable(ref:u_object):
 	if shadows_declared(ref.name): make_error(errors.shadows % ['',ref.name])
 	current_scope[ref.name] = ref
@@ -147,8 +149,33 @@ func is_assignable(expr:AST.Expr,literal_allowed = true) -> bool:
 		type.IDENTIFIER,type.MEMBER_CALL,
 		type.INDEX,type.ASSIGNMENT
 	] 
-	if literal_allowed: assignables.append(type.LITERAL)
+	if literal_allowed:assignables.append(type.LITERAL)
 	return expr.type in assignables
+
+func can_reduce(expr:AST.Expr) -> bool:
+	const type = loader_lang.Type
+	match expr.type:
+		type.ARRAY:
+			var elements:Array[bool]
+			for e in expr.elements: elements.append(can_reduce(e))
+			return !elements.has(false)
+		type.DICTIONARY:
+			var elements:Array[bool]
+			
+			for e in expr.elements.keys():
+				elements.append(can_reduce(e) if e is AST.Expr else true)
+			
+			for e in expr.elements.values(): 
+				elements.append(can_reduce(e))
+			
+			return !elements.has(false)
+		type.LITERAL:
+			return true
+		type.UNARY_OPERATOR:
+			return can_reduce(expr.operand)
+		type.ASSIGNMENT:
+			return can_reduce(expr.left) and can_reduce(expr.right)
+	return false
 
 
 func visit_header():
@@ -174,11 +201,17 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	var hint_valid = ref.resolve_hint(stmt.type_hint,true)
 	var init = stmt.initializer != null
 	
+	ref.is_constant = stmt.is_constant
 	if !hint_valid and ref.hint_n != '':
 		make_error(errors.invalid_hint % ref.hint_n)
 	
-	if stmt.is_constant and !init:
-		make_error('constants need initializers "%s"' % stmt.name)
+	if stmt.is_constant:
+		if init:
+			if !can_reduce(stmt.initializer): 
+				make_error('assigned value for constant "%s" isnt a constant expression.' % ref.name)
+		else:
+			make_error('constants need initializers "%s"' % stmt.name)
+	
 	if init:
 		var init_type:u_type = stmt.initializer.visit(self)
 		var init_object = init_type.meta.get('object_type',type_string_(init_type.type))
@@ -206,12 +239,12 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 func visit_func_decl(stmt:AST.funcDecl_Statement):
 	var ref := get_reference(stmt.name)
 	if ref.is_resolved(): return ref
-	var hint_valid = ref.resolve_hint(stmt.type_hint)
+	var hint_valid = ref.resolve_hint(stmt.type_hint,true)
 	var visited_return := false
 	jump_scope() ; def_scope()
 	current_fn = ref
 	if !hint_valid and ref.hint_n != '':
-		make_error(errors.invalid_hint % ref.hint_n)
+		make_error('could not resolve function hint type -> "%s"' % ref.hint_n)
 	
 	for param in stmt.params.values(): 
 		var p_ref = param.visit(self)
@@ -291,15 +324,14 @@ func visit_expression(stmt:AST.expression_Statement):
 	return utype(TYPE_NIL)
 
 func visit_unary(expr:AST.unary):
-	expr.operand.visit(self)
-	return utype(TYPE_NIL)
+	return expr.operand.visit(self)
 
 func visit_ternary(expr:AST.ternary) -> u_type:
 	var target = expr.target.visit(self) 
 	var left = expr.left.visit(self) 
 	var right = expr.right.visit(self)
 	
-	if left != TYPE_BOOL: make_error(errors.expected % ['boolean',type_string_(left.type),'ternary'])
+	if left.type != TYPE_BOOL: make_error(errors.expected % ['boolean',type_string_(left.type),'ternary'])
 	if target != right: make_error(errors.ternary % [type_string_(target.type),type_string_(right.type)])
 	return target
 
@@ -343,7 +375,7 @@ func visit_assignment(expr:AST.assignment) -> u_type:
 	
 	var left_obj = left.meta.get('object_type')
 	var right_obj = right.meta.get('object_type')
-	
+	var objects_exist = left_obj != null and right_obj != null
 	
 	if right.type in [TYPE_MAX,TYPE_NIL]:
 		make_error('cannot assign a functions result, if the function is un-typed or void')
@@ -352,15 +384,20 @@ func visit_assignment(expr:AST.assignment) -> u_type:
 	if expr.left.type == loader_lang.Type.IDENTIFIER:
 		var ref = get_reference(expr.left.name)
 		if ref == null: return utype(TYPE_NIL)
-		
-		if ref.is_weak: #re-assign and return
-			ref.hint = right
-			return right
+		if ref.is_constant:
+			make_error('cannot assign a new value to a constant. -> "%s"' % ref.name)
+		if !ref.hint.meta.is_empty():
+			orphaned.erase(ref.hint)
+		ref.hint = right
+		ref.hint_n = right.meta.get('object_type',type_string_(right.type))
+		return right
 	
 	
 	if left.type != right.type and !lang_utilities.can_convert(left.type,right.type):
 		make_error(errors.assign % [type_string_(left.type),type_string_(right.type)])
-	elif left_obj != right_obj:
+	elif left_obj != right_obj and left.type == TYPE_OBJECT:
+		if objects_exist and ClassDB.get_inheriters_from_class(left_obj).has(right_obj):
+			return right
 		make_error(errors.object_assign % [right_obj,left_obj])
 	
 	return right
@@ -506,6 +543,7 @@ func visit_index(expr:AST.index) -> u_type:
 func visit_member_call(stmt:AST.member_Call) -> u_type:
 	var target_is_var = stmt.target is AST.variable
 	var target_visited = null if target_is_var else stmt.target.visit(self) 
+	if has_errors: return utype(TYPE_NIL)
 	var name:String = stmt.target.name if target_is_var else target_visited.meta.get('object_type','')
 	var ref:u_object = get_reference(name) if target_is_var else null
 	var member = stmt.member_name
@@ -514,9 +552,9 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	
 	if ref == null:
 		ref = u_object.new(name) ; ref.hint_n = name
-		if !ref.resolve_hint_as_class(): 
+		if !ref.resolve_hint_as_class():
+			make_error(errors.invalid_hint % ref.hint_n)
 			return utype(TYPE_NIL)
-		
 		
 		if member == 'new':
 			ref.hint.meta = {
@@ -558,6 +596,7 @@ func register_class(p_class:String) -> Dictionary[String,func_sig]:
 	return registry
 
 class u_object:
+	var is_constant = false
 	var name:String
 	
 	#its worth noting TYPE_MAX, is essentially used like 'TYPE_ANY'
@@ -565,12 +604,7 @@ class u_object:
 	
 	var ast_expr:AST.Expr
 	
-	var is_weak:bool:
-		get():
-			return hint_n == ''
-	#if hint exists but the hint_n is empty, the object type can change
-	#i.e its 'weak'
-
+	
 	var params:Array[u_type] = []
 	var varadic := false
 	
@@ -594,6 +628,8 @@ class u_object:
 			valid = resolve_hint_as_class()
 		return valid
 	
+
+	
 	func resolve_hint_name(hint_st := hint_n):
 		var valid := true
 		var resolved_tk:Variant.Type = lang_utilities.get_builtin_type(hint_st)
@@ -611,13 +647,17 @@ class u_object:
 	func resolve_hint_as_class() -> bool:
 		var n_is_class = lang_utilities.is_class_or_type(hint_n,false,false)
 		
-		if !n_is_class: 
-			if ClassDB.class_exists(hint_n): 
-				if !ClassDB.can_instantiate(hint_n): return false
-			else:
-				return false
-			printerr('cannot resolve "%s" as a valid class' % hint_n)
+		if !ClassDB.class_exists(hint_n): return false
+		
+		if !ClassDB.can_instantiate(hint_n): return false
+		
+		if hint_n == 'RefCounted' || ClassDB.get_inheriters_from_class('RefCounted').has(hint_n): 
 			return false
+		
+		if !n_is_class: return false
+		
+		if !Whitelist.available(hint_n): return false
+		
 		#im pretty sure if it can be instanced its an object!!
 		hint = utype(TYPE_OBJECT)
 		return true

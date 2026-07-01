@@ -201,9 +201,9 @@ class dictionary extends Expr:
 		if style != styling.NONE:
 			return 
 		if EQUAL:
-			style = styling.PYTHON_DICT
-		elif COLON:
 			style = styling.LUA_TABLE
+		elif COLON:
+			style = styling.PYTHON_DICT
 
 	func _init() -> void:
 		type = loader_lang.Type.DICTIONARY

@@ -65,7 +65,7 @@ static func visit_array(expr:AST.array) -> String:
 
 static func visit_dictionary(expr:AST.dictionary) -> String:
 	var dict:PackedStringArray = []
-	var dict_ch = ':' if expr.style == expr.styling.LUA_TABLE else '='
+	var dict_ch = ':' if expr.style != expr.styling.LUA_TABLE else '='
 	for element in expr.elements:
 		dict.append('%s %s %s' % [element.get_code(),dict_ch,expr.elements[element].get_code()])
 	return '{%s}' % ','.join(dict)
