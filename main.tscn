@@ -6,6 +6,7 @@ script/source = "extends Control
 var scripted_object
 
 func _ready() -> void:
+	
 	$parse.pressed.connect(_parse)
 	$reload.pressed.connect(
 		func():
@@ -13,6 +14,7 @@ func _ready() -> void:
 			free_scripted_object()
 			get_tree().change_scene_to_file(\"res://main.tscn\")
 	)
+
 
 
 func _parse():

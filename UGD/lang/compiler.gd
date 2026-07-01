@@ -18,6 +18,7 @@ const errors = {
 	'standalone':'Standalone expression (the line may have no effect) -> "%s"',
 	'object_assign':'value of type "%s" cannot be assigned to a variable of type "%s"',
 	'unimplemented':'"%s" call unimplemented',
+	'object_freed':'object "%s" was freed previously and cannot be addressed now -> "%s"',
 }
 
 var current_fn:u_object = null
@@ -467,6 +468,9 @@ func visit_function_call(expr:AST.function_call) -> u_type:
 	if ref.name == 'add_child':
 		var meta_visit = expr.args[0].visit(self)
 		var meta:Dictionary = meta_visit.meta
+		if meta.get('freed'):
+			make_error(errors.object_freed % [expr.args[0].get_code(),ref.name])
+			return utype(TYPE_NIL)
 		if !meta.get('orphaned',false):
 			make_error('cannot add an already parented node %s' % expr.args[0].get_code())
 			return utype(TYPE_NIL)
@@ -571,7 +575,16 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	var ref:u_object = get_reference(name) if target_is_var else null
 	var member = stmt.member_name
 	
-	if has_errors: return ref.hint if ref != null else utype(TYPE_NIL)
+
+	#something like 'Node.new().name' would cause such cases
+	if stmt.member is AST.member_Call:
+		make_error('invalid member call chain on -> "%s"' % name)
+	elif member == '': 
+		make_error('invalid member address on -> "%s"' % name)
+	elif ref != null and ref.hint.meta.has('freed'):
+		make_error(errors.object_freed % [name,member])
+	
+	if has_errors: return utype(TYPE_NIL)
 	
 	if ref == null:
 		ref = u_object.new(name) ; ref.hint_n = name
@@ -588,15 +601,23 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 			orphaned[ref.hint] = null
 			return ref.hint
 	
+
+	
 	var data = null
 	
-	#because of the way some member data is stored, i have to do this, particularly for dictionarys/enums
+	#because of the way some member data is stored; i have to do this, particularly for dictionarys/enums
 	for key in ref.meta.keys(): 
 		var string_matches = (key.contains('"') || key.contains("'")) and key.contains(member)
 		if key != member and !string_matches: continue
 		data = ref.meta.get(key,null) ; break
-
-	if data == null: data = ref.get_virtual_data(member,stmt.is_property)
+	
+	if data == null: 
+		var is_instanced = ref.hint.meta.has('orphaned')
+		data = ref.get_virtual_data(member,stmt.is_property) if is_instanced else {}
+		if !is_instanced:
+			make_error('cannot call property/method -> "%s" on base "%s" as this object needs to be instanced first' % [member,ref.name])
+			return utype(TYPE_NIL)
+	
 	if data.is_empty(): 
 		make_error('property/method "%s" does not exist in -> "%s" on base of "%s"' % [member,ref.name,ref.hint_n])
 		return utype(TYPE_NIL)
@@ -605,6 +626,11 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	
 	if data.has('return'): return_type = data['return']['type']
 	elif data.has('type'): return_type = data['type']
+	
+	if member == 'free' and ref.hint.meta.has('object_type'):
+		ref.hint.meta['freed'] = true
+		orphaned.erase(ref.hint)
+	
 	return utype(return_type)
 
 func type_string_(type) -> String:
@@ -703,7 +729,7 @@ class u_object:
 		to_append = ClassDB.class_get_property_list('GDScript') if is_property\
 		else ClassDB.class_get_method_list('GDScript')
 		
-		if is_property: list.append_array(ClassDB.class_get_signal_list(hint_n))
+		#if is_property: list.append_array(ClassDB.class_get_signal_list(hint_n))
 		
 		list.append_array(to_append)
 		for virtual in list:

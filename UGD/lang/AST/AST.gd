@@ -88,7 +88,14 @@ class member_Call extends Expr:
 	
 	var member_name:String :
 		get():
-			return member.target.name if !is_property else member.name
+			var tmember_name = member.get('name')
+			if tmember_name == null: tmember_name = ''
+			
+			var ttarget = member.get('target') ; var target_name = ''
+			if ttarget != null: target_name = ttarget.get('name')
+			if target_name == null: target_name = ''
+			
+			return target_name if !is_property else tmember_name
 	
 	func _init(p_target:Expr,arg:Expr) -> void:
 		type = loader_lang.Type.MEMBER_CALL

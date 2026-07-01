@@ -27,6 +27,8 @@ static func load_string(code:String,className:String,cache:bool = false) -> Vari
 
 
 
+
+
 ##packs the given string as a node
 ##WARNING this only throws an error if code seriously goes wrong 
 ##(something that cant be caught through the loader steps)
@@ -51,4 +53,12 @@ static func pack_string_as_node(code:String,p_class:String,cache:bool = false) -
 	node.set_script(script)
 	return node
 
-static func empty_cache() -> void: sha_cache.clear()
+static func empty_cache(clean_lang := false) -> void: 
+	if clean_lang: clean_lang_cache()
+	sha_cache.clear()
+
+
+static func clean_lang_cache():
+	loader_lang.global_class_list.clear()
+	loader_lang.class_list.clear()
+	loader_lang.built_in_types.clear()
