@@ -74,8 +74,8 @@ static func visit_enum(expr:AST.enumerator) -> String:
 	var pairs:PackedStringArray = []
 	for enumerator in expr.enumerators: 
 		#enum values cannot be expressions or expr strings; so i dont need to .accept them :D
-		var name = enumerator.keys()[0]
-		var value = enumerator[name]
+		var name = enumerator.key
+		var value = enumerator.value
 		pairs.append('%s = %s' % [name,value])
 	return 'enum %s {%s}' % [expr.name,','.join(pairs)]
 

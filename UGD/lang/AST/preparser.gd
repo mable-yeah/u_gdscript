@@ -126,11 +126,17 @@ func parse_enum_declaration() -> AST.enumerator:
 		if check(tk_type.EQUAL):
 			advance()
 			if check(tk_type.LITERAL) and peek().literal is int || check(tk_type.IDENTIFIER):  #foo = 2
-				_enumerators.push_back({enum_name.literal:advance().literal})
+				_enumerators.push_back({
+					'key':enum_name.literal,
+					'value':advance().literal
+					})
 			else:
 				make_error('expected IDENTIFIER or LITERAL (type int), got %s' % peek().get_name())
 		else:
-			_enumerators.push_back({enum_name.literal:_enumerators.size()}) 
+			_enumerators.push_back({
+				'key':enum_name.literal,
+				'value':_enumerators.size()
+				}) 
 			#just push it back with indexing
 		if !check(tk_type.COMMA):
 			skip_newlines(true)

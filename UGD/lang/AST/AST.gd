@@ -47,6 +47,7 @@ class literal extends Expr:
 	var variant:Variant = null
 	
 	
+	
 	func _init(p_variant:Variant) -> void:
 		variant = p_variant
 		literal_type = typeof(p_variant) as Variant.Type

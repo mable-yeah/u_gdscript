@@ -2,7 +2,6 @@ class_name Whitelist
 
 const list = [
 	'Node',
-	'Control',
 	'ColorRect',
 	'Time',
 	'Timer',

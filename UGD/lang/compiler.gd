@@ -1,6 +1,8 @@
 class_name compiler extends AST.PROGRAM
 ##handles AST analysis and re-compiling code into gd script
 
+
+
 const errors = {
 	'call_param':'a function call parameter of "%s" does not match its expected signature, expected "%s" got "%s"',
 	'signature':'function "%s" does not match its parent signature, "%s"',
@@ -235,6 +237,25 @@ func visit_var_decl(stmt:AST.varDecl_Statement):
 	def_variable(ref)
 	current_v = null
 	return ref
+
+func visit_enum(expr:AST.enumerator):
+	var ref = u_object.new(expr.name) 
+	ref.hint_n = 'enum.%s' % ref.name
+	
+	for num in expr.enumerators:
+		if num.key in ref.meta:
+			make_error('name "%s" was already in enum -> "%s"' % [num.key,ref.name])
+			break
+		ref.meta[num.key] = {  #set it up like a dictionary anyways
+			'key':num.key,
+			'element':num.value,
+			'type':TYPE_INT
+		}
+	
+	def_variable(ref)
+	return ref
+
+
 
 func visit_func_decl(stmt:AST.funcDecl_Statement):
 	var ref := get_reference(stmt.name)
@@ -505,18 +526,20 @@ func visit_array(expr:AST.array) -> u_type:
 func visit_dictionary(expr:AST.dictionary) -> u_type:
 	if current_v == null:  make_error(errors.standalone % 'dictionary') ; return utype(TYPE_DICTIONARY)
 	for key in expr.elements.keys():
-		var element_visited = expr.elements[key].visit(self)
+		var element_visited:u_type = expr.elements[key].visit(self)
 		var key_data = key.visit(self) if key is AST.Expr else key
 		var key_code = key.get_code() if key is AST.Expr else key
-		
 		
 		current_v.meta[key_code] = {
 			'key':key_data,
 			'element':element_visited,
+			'type':element_visited.type
 		}
-		
 	return utype(TYPE_DICTIONARY)
 #this begs the question? why did the dictionary choose key over the bread?
+
+
+
 
 func visit_index(expr:AST.index) -> u_type:
 	var target = expr.target.visit(self)
@@ -565,7 +588,15 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 			orphaned[ref.hint] = null
 			return ref.hint
 	
-	var data = ref.get_virtual_data(member,stmt.is_property)
+	var data = null
+	
+	#because of the way some member data is stored, i have to do this, particularly for dictionarys/enums
+	for key in ref.meta.keys(): 
+		var string_matches = (key.contains('"') || key.contains("'")) and key.contains(member)
+		if key != member and !string_matches: continue
+		data = ref.meta.get(key,null) ; break
+
+	if data == null: data = ref.get_virtual_data(member,stmt.is_property)
 	if data.is_empty(): 
 		make_error('property/method "%s" does not exist in -> "%s" on base of "%s"' % [member,ref.name,ref.hint_n])
 		return utype(TYPE_NIL)
