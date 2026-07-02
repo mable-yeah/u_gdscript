@@ -14,8 +14,7 @@ func _ready() -> void:
 			free_scripted_object()
 			get_tree().change_scene_to_file(\"res://main.tscn\")
 	)
-
-
+	
 
 func _parse():
 	free_scripted_object()

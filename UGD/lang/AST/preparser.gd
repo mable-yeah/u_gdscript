@@ -96,9 +96,10 @@ func evaluate_program() -> void:
 		elif check(tk_type.NEWLINE):
 			skip_newlines()
 		else:
-			if !OS.has_feature("editor"): #fail if outside of editor
-				make_error(global_error_types[0] % peek().get_name())
-			advance()
+			var meta = [peek().get_name().to_lower(),peek().literal]
+			var err = '%s "%s"'  % meta
+			if meta[1] == null: err = '"%s"' % meta[0]
+			make_error('unexpected %s in class body' % err) ; advance()
 		if has_errors:
 			break
 	#how to teleport tutorial working 2026

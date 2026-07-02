@@ -166,7 +166,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 		':':
 			type = tk_type.COLON
 		';':
-			return tk_type.NEWLINE 
+			type = tk_type.NEWLINE 
 			#shhh, this a hacky way to get multiple statements in one line
 			#var x = 2+2 ; var y = 5+5
 			#allowing for shit like this which is valid in regular godot script
@@ -533,7 +533,6 @@ func string():
 	if peek_char() == quote_char and peek_char(1) == quote_char:
 		read_char()
 		read_char()
-	
 	var result := ""
 	var string_found := false
 	while not string_found:
@@ -542,7 +541,7 @@ func string():
 		var p := peek_char()
 		
 		if p == '\\':
-			result += p ; read_char()
+			read_char()
 			result += peek_char()
 		elif p == quote_char:
 			string_found = true
@@ -552,7 +551,6 @@ func string():
 		read_char()
 		if string_found:
 			break
-	
 	return make_literal('%s%s%s' % [quote_char,result,quote_char])
 
 ##returns an annotation token if found, else error

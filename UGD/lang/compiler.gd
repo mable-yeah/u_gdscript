@@ -14,7 +14,7 @@ const errors = {
 	'assign':'invalid assignment from %s to %s',
 	'loop':'cannot use "%s" from outside of a loop',
 	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unresolved':'unresolved/orphan object found, .new() -> "%s" in function "%s"',
+	'unresolved':'unresolved/orphan object found, .new() -> "%s" in "%s"',
 	'standalone':'Standalone expression (the line may have no effect) -> "%s"',
 	'object_assign':'value of type "%s" cannot be assigned to a variable of type "%s"',
 	'unimplemented':'"%s" call unimplemented',
@@ -59,6 +59,7 @@ var unmutables:Dictionary[String,func_sig] = {
 	'randf':func_sig.new('randf','float',[],false),
 	'randi':func_sig.new('randi','int',[],false),
 	'range':func_sig.new('range','Array',[utype(TYPE_INT),utype(TYPE_INT)],false),
+	'str':func_sig.new('str','String',[],true),
 }
 
 
@@ -104,7 +105,7 @@ func visit_code():
 	for unresolved:u_type in orphaned.keys():
 		var info = [\
 		unresolved.meta.get('object_type','unknown object type'),\
-		unresolved.meta.get('root','unknown function name')
+		unresolved.meta.get('root','main body')
 		]
 		make_error(errors.unresolved % info)
 	
@@ -485,25 +486,29 @@ func visit_function_call(expr:AST.function_call) -> u_type:
 
 
 func visit_for(stmt:AST.for_Statement):
-	loop_depth += 1
-	stmt.iter.visit(self) ; def_scope()
-	def_variable(u_object.new(stmt.name))
-	for expression in stmt.body:
-		expression.visit(self)
-	loop_depth -= 1 ; leave_scope()
-	return utype(TYPE_NIL)
-
-func visit_while(stmt:AST.while_Statement):
-	loop_depth += 1 
+	loop_depth += 1 ; def_scope()
 	
-	if !is_assignable(stmt.condition,true):
-		make_error('expected assignable condition after while, got %s instead' % stmt.condition.get_type_name())
+	const iter_types = [TYPE_ARRAY,TYPE_DICTIONARY,TYPE_INT,TYPE_FLOAT]
+	var iter:u_type = stmt.iter.visit(self)
+	if !(iter.type in iter_types):
+		make_error('cannot iterate on base type -> "%s"' % type_string_(iter.type))
 		return utype(TYPE_NIL)
 	
-	stmt.condition.visit(self) ; def_scope()
-	for expression in stmt.body:expression.visit(self)
-	loop_depth -= 1 ; leave_scope()
+	var ref = u_object.new(stmt.name)
+	ref.hint_n = 'int' ; ref.hint = u_type.new(TYPE_INT)
+	def_variable(ref)
+	
+	for expression in stmt.body:
+		expression.visit(self)
+	leave_scope()
+	loop_depth -= 1
 	return utype(TYPE_NIL)
+
+#generally while loops cause things to freeze, so not doing it for now :/
+func visit_while(_stmt:AST.while_Statement):
+	make_error(errors.unimplemented % 'while')
+	return utype(TYPE_NIL)
+
 
 func visit_break(_stmt:AST.break_Statement):
 	if loop_depth == 0: make_error(errors.loop % 'break')
@@ -596,8 +601,9 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 			ref.hint.meta = {
 				'orphaned' = true,
 				'object_type' = name,
-				'root' = current_fn.name
 			}
+			
+			if current_fn != null: ref.hint.meta['root'] = 'function %s' % current_fn.name 
 			orphaned[ref.hint] = null
 			return ref.hint
 	
@@ -614,7 +620,7 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	if data == null: 
 		var is_instanced = ref.hint.meta.has('orphaned')
 		data = ref.get_virtual_data(member,stmt.is_property) if is_instanced else {}
-		if !is_instanced:
+		if !is_instanced and ref.hint.type == TYPE_OBJECT:
 			make_error('cannot call property/method -> "%s" on base "%s" as this object needs to be instanced first' % [member,ref.name])
 			return utype(TYPE_NIL)
 	
