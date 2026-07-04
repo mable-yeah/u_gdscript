@@ -245,7 +245,10 @@ func parse_current_scope() -> AST.Expr:
 
 func parse_assignment() -> AST.Expr: #expression or assignment
 	var _p_cursor = cursor
-	var _left = parse_call()
+	var _left = parse_expression() 
+	#this was parse_call before but that messes up assignment for standalone expressions.
+	#while standalone lines are useless thats technically wrong
+	
 	if has_errors: return null
 	
 	if check(tk_type.EQUAL): #property = value
@@ -258,6 +261,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
 		var op_tk = advance()
 		var _right = parse_expression()
+		
 		end_statement('assignment')
 
 		var op:operator_type
@@ -267,6 +271,7 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
 		
 		return AST.assignment.new(_left,op,_right,false)
+	
 	
 	end_statement('assignment')
 	return AST.expression_Statement.new(_left)
@@ -542,9 +547,7 @@ func parse_unary() -> AST.Expr:
 		return AST.unary.new(operand,op)
 	return parse_call()
 
-
-func parse_call() -> AST.Expr:
-	var expr = parse_primary()
+func parse_call(expr = parse_primary()) -> AST.Expr:
 	while true:
 		if check(tk_type.PARENTHESIS_OPEN): #(arg1,arg2)
 			advance()
@@ -569,9 +572,10 @@ func parse_call() -> AST.Expr:
 			expr = AST.index.new(expr,ind)
 		elif check(tk_type.PERIOD): #.property
 			advance()
-			var member:AST.Expr
-			if check(tk_type.IDENTIFIER): member = parse_expression(false)
-			if member == null: break
+			if !check(tk_type.IDENTIFIER):
+				make_error('expected identifier after "." for attribute access') ; break
+			var member = AST.variable.new(advance().literal)
+			member = parse_call(member)
 			expr = AST.member_Call.new(expr,member)
 		else:
 			break
