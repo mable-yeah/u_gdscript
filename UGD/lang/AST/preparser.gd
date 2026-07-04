@@ -57,15 +57,6 @@ func evaluate_program() -> void:
 		if check(tk_type.EXTENDS):
 			make_error(global_error_types[0] % peek().get_name())
 			advance()
-			#advance()
-			#var c_tk = consume(tk_type.IDENTIFIER,'expected identifier / class name after class_name not "%s"')
-			#if has_errors:
-				#continue
-			#if program.extends_n == "":
-				#program.extends_n = c_tk.literal
-				#continue
-			#make_error('class extention is already defined as "%s" in this context' %[program.extends_n])
-		
 		#rest of this is body
 		elif check(tk_type.ANNOTATION):
 			make_error(global_error_types[0] % peek().get_name())
@@ -189,9 +180,7 @@ func parse_func_declaration() -> AST.funcDecl_Statement:
 		else:
 			make_error('expected identifier or void after "->", got "%s"' % peek().get_name())
 		
-	consume(tk_type.COLON,'expected ":" after function declaration, got "%s"')
-	skip_newlines()
-	consume(tk_type.INDENT,'expected indent after function declaration')
+
 
 	statement.body = parse_scope_block()
 	statement.type_hint = _type
@@ -202,15 +191,18 @@ func parse_func_declaration() -> AST.funcDecl_Statement:
 
 
 func parse_scope_block() -> Array[AST.Expr]:
+	consume(tk_type.COLON,'expected ":" after statement, got "%s"')
+	skip_newlines()
+	consume(tk_type.INDENT,'expected indent after statement')
 	if has_errors:
 		return []
 	var lines:Array[AST.Expr] = []
+	
 	while (!check(tk_type.DEDENT) and !is_at_end()):
 		skip_newlines()
 		if (!check(tk_type.DEDENT) and !is_at_end()):
 			lines.push_back(parse_current_scope())
-			if has_errors:
-				return []
+			if has_errors: return []
 	
 	consume(tk_type.DEDENT,'expected dedent after scope body')
 	return lines
@@ -259,14 +251,14 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 	if check(tk_type.EQUAL): #property = value
 		advance()
 		var _right = parse_expression()
-		consume(tk_type.NEWLINE,'expected newline after assignment, got %s instead')
+		end_statement('assignment')
 		return AST.assignment.new(_left,operator_type.OP_LOGIC_EQUAL,_right,false)
 	
 	if check(tk_type.STAR_EQUAL) || check(tk_type.SLASH_EQUAL) \
 	|| check(tk_type.PLUS_EQUAL) || check(tk_type.MINUS_EQUAL): #property 'operation_equals' value
 		var op_tk = advance()
 		var _right = parse_expression()
-		consume(tk_type.NEWLINE,'expected newline after op assignment')
+		end_statement('assignment')
 
 		var op:operator_type
 		if check(tk_type.PLUS_EQUAL,op_tk) || check(tk_type.MINUS_EQUAL,op_tk):
@@ -275,12 +267,8 @@ func parse_assignment() -> AST.Expr: #expression or assignment
 			op = operator_type.OP_MULTIPLICATION if check(tk_type.STAR_EQUAL,op_tk) else operator_type.OP_DIVISION
 		
 		return AST.assignment.new(_left,op,_right,false)
-		#this was the previous line, i dont remember what i was cooking
-		#BUT it may break something so imma keep it
-		#AST.assignment.new(name,operator_type.OP_LOGIC_EQUAL,_expr)
-		
 	
-	consume(tk_type.NEWLINE,'expected newline after expression, got %s')
+	end_statement('assignment')
 	return AST.expression_Statement.new(_left)
 	
 
@@ -304,12 +292,6 @@ func parse_for() -> AST.for_Statement:
 	consume(tk_type.TK_IN,'expected "in" after iterator name')
 	var iter = parse_expression()
 	
-	consume(tk_type.COLON,'expected ":" after for statement')
-	skip_newlines()
-	consume(tk_type.INDENT,'expected "indent" after for statement')
-	
-	if has_errors:
-		return null
 	
 	var body = parse_scope_block()
 	return AST.for_Statement.new(name_tk.literal,body,iter)
@@ -319,38 +301,21 @@ func parse_for() -> AST.for_Statement:
 func parse_while() -> AST.while_Statement:
 	advance()
 	var expression = parse_expression()
-	consume(tk_type.COLON,'expected ":" after while statement')
-	skip_newlines()
-	consume(tk_type.INDENT,'expected "indent" after if statement')
-	
-	if has_errors:
-		return null
-	
 	var body = parse_scope_block()
 	return AST.while_Statement.new(expression,body)
 
 func parse_if() -> AST.if_Statement:
 	advance()
 	var expression = parse_expression()
-	consume(tk_type.COLON,'expected ":" after if statement')
-	skip_newlines()
-	consume(tk_type.INDENT,'expected "indent" after if statement')
-	
-	if has_errors:
-		return null
 	
 	var then_expr:Array[AST.Expr] = parse_scope_block()
 	var else_expr:Array[AST.Expr] = []
 	
 	skip_newlines()
-	
 	if check(tk_type.ELIF):
 		else_expr.push_back(parse_if())
 	elif check(tk_type.ELSE):
 		advance()
-		consume(tk_type.COLON,'expected ":" after else')
-		skip_newlines()
-		consume(tk_type.INDENT,'expected "indent" after if statement')
 		else_expr = parse_scope_block()
 	
 	if has_errors:
@@ -383,7 +348,7 @@ func parse_var_declaration(is_const:bool = false,expect_newline := true) -> AST.
 			#if get set WERE supported parse it here
 			make_error('colon found after variable declaration "%s", get()/set() is unsupported' % _name.literal)
 		else:
-			consume(tk_type.NEWLINE,'expected newline after variable declaration, found %s') 
+			end_statement('var declaration')
 	
 	return AST.varDecl_Statement.new(_name.literal,_type,_initializer,is_const)
 
@@ -610,14 +575,13 @@ func parse_call() -> AST.Expr:
 			expr = AST.member_Call.new(expr,member)
 		else:
 			break
-	
 	return expr
 
 func parse_primary() -> AST.Expr:
 	if check(tk_type.SELF):
 		advance()
 		return AST.literal.new('self')
-
+	
 	#BUILT IN VALUES/ DIGITS, STRINGS
 	if check(tk_type.LITERAL):
 		return AST.literal.new(advance().literal)
@@ -709,5 +673,17 @@ func parse_primary() -> AST.Expr:
 		consume(tk_type.BRACE_CLOSE,'expected closing brace in dictionary, got %s')
 		return expr
 	
-	make_error('pre-processor error, expected expression :/, got %s ' % peek().get_name())
+	make_error('expected expression :/, got %s ' % peek().get_name())
 	return null
+
+
+func end_statement(context:String) -> void:
+	var found := false
+	
+	while is_end_token():  advance() ; found = true
+	
+	if found: return
+	make_error('expected newline or ";" after %s got "%s"' % [context,peek().get_name()])
+
+func is_end_token():
+	return check(tk_type.NEWLINE) || check(tk_type.SEMICOLON) || check(tk_type.TK_EOF)
