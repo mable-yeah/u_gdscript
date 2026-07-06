@@ -43,8 +43,7 @@ var tk_arr:Array[TOKENS.token] = []
 var last_token:TOKENS.token = TOKENS.create_token()
 
 func _init(p_code,debug_print:bool = false) -> void:
-	code = lang_utilities.scrub_comments_GD(p_code)
-	code = code.insert(0,'\n') + '\n' 
+	code = p_code.insert(0,'\n') + '\n' 
 	#since i cant directly manage the start and ending of the file
 	#both ends are represented by an extra new line
 	#this helps the parser not tweak out when indenting on the first line
@@ -136,7 +135,7 @@ func get_token_type() -> Variant: #tk_type OR a token
 	var type = tk_type.ERROR
 	var c = ch
 	var p = peek_char()
-
+	
 	
 	if c == '\\':
 		return handle_newline()
@@ -250,10 +249,18 @@ func get_token_type() -> Variant: #tk_type OR a token
 					type = tk_type.STAR_STAR
 			else:
 				type = tk_type.STAR
+		'#':
+			if p == '*':
+				return multiline_comment()
+			return singleline_comment()
 		"/":
 			if p == "=":
 				read_char()
 				type = tk_type.SLASH_EQUAL
+			elif p == '*':
+				return multiline_comment()
+			elif p == '/':
+				return singleline_comment()
 			else:
 				type = tk_type.SLASH
 		"%":
@@ -390,7 +397,30 @@ func potential_identifier():
 	return make_identifier(p_str)
 
 
+func singleline_comment():
+	while true:
+		if is_at_end(): break
+		if peek_char() == '\n': 
+			read_char() ; break
+		read_char()
+	eat_whitespace()
+	return get_token_type()
 
+func multiline_comment():
+	var leading = '*%s' % ch
+	read_char()
+	var found = false
+	while true:
+		if is_at_end(): break
+		if ch + peek_char() == leading:
+			found = true
+			read_char() ; read_char()
+			break
+		read_char()
+	eat_whitespace()
+	if is_at_end() and !found:
+		return make_error_tk('unterminated comment block')
+	return get_token_type()
 
 ##returns a literal token with valid number data if found, else error
 func number():
@@ -711,7 +741,6 @@ func check_indent():
 	if column != 1:
 		make_error('checking tokenizer indentation in the middle of a line')
 		return
-	#eat_whitespace()
 	
 	if is_at_end():
 		if line_continuous || multiline_mode:
@@ -811,7 +840,7 @@ func indent_level() -> int:
 
 ##prints error message ++ returns error token (type)
 func make_error(st:String):
-	var generic = 'Tokenizer/Lexer error: \' %s \''
+	var generic = "Tokenizer/Lexer error: ' %s '"
 	printerr(generic % st)
 	errors.push_back(st)
 	return tk_type.ERROR

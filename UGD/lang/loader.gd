@@ -8,8 +8,6 @@ const err = {
 }
 
 static func load_string(code:String,className:String,cache:bool = false) -> Variant:
-	code = lang_utilities.scrub_comments_C(code)
-	
 	var p_lexer = lexer.new(code)
 	if p_lexer.has_errors:
 		printerr(err.STOPPED_AT % ('Tokenizer/Lexer, error count: %s' % p_lexer.errors.size())) ; return

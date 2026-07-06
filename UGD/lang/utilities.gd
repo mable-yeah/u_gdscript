@@ -112,71 +112,11 @@ static func get_builtin_type(st_type:String) -> Variant.Type:
 static func is_builtin(st_type:String):
 	return loader_lang.built_in_types.keys().has(st_type)
 
-
-##scrubs godot style comments, '##','#'
-static func scrub_comments_GD(script_code:String) -> String:
-	var code_packed = script_code.split("\n",true)
-	for i in code_packed.size():
-		var line:String = code_packed[i]
-		var line_length:int = line.length()
-		var comment_special:int  = line.find('##')
-		var comment:int = line.find('#')
-		var comment_idx:int = comment_special if comment > comment_special else comment
-		if comment_special == -1 and comment == -1: comment_idx = -1
-		if comment_special == -1 and comment != -1: comment_idx = comment
-		if comment_special != -1 and comment == -1: comment_idx = comment_special
-		
-		if comment_idx > -1:
-			line = line.erase(comment_idx,line_length)
-			code_packed[i] = line
-	
-	return "\n".join(code_packed)
-
-##scrubs C++ style comments, '/*','*/', '//'
-static func scrub_comments_C(script_code:String) -> String:
-	var code_packed = script_code.split("\n",true)
-	
-	var block_started := false
-	for i in code_packed.size(): #handles comment blocks
-		var line:String = code_packed[i]
-		var line_length:int = line.length()
-		var block_st:int = line.find('/*')
-		var block_end:int = line.find('*/')
-		if block_st > -1: block_started = true
-		if block_started:
-			var length = line_length if block_end == -1 else block_end + 1
-			line = line.erase(block_st if block_st != -1 else 0,length)
-		if block_end > -1: block_started = false
-		code_packed[i] = line
-	
-	for i in code_packed.size(): #handles single line comments
-		var line:String = code_packed[i]
-		var line_length:int = line.length()
-		var comment_idx:int = line.find('//')
-		if comment_idx > -1:
-			line = line.erase(comment_idx,line_length)
-			code_packed[i] = line
-	return "\n".join(code_packed)
-
-
-##scrubs whitespace from code
-static func scrub_whitespace(script_code:String) -> String:
-	var code_packed = script_code.split("\n",true)
-	var scrubbed = code_packed.duplicate()
-	for i in code_packed.size():
-		var line = code_packed[i]
-		if line.strip_edges() == "":
-			scrubbed.erase(line)
-	return "\n".join(scrubbed)
-
-
-
-
 static func pack_AST(p_ast:compiler) -> String:
 	var packed:PackedStringArray = []
 	packed.append('extends %s' % p_ast.object_class)
 	
-	if p_ast.class_n != '':
+	if !p_ast.class_n.is_empty():
 		p_ast.class_n = p_ast.class_n.substr(0,50) ; var class_st = 'class_name %s' % p_ast.class_n
 		packed.append(class_st)
 	

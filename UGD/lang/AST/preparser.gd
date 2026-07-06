@@ -392,7 +392,7 @@ func check(type:tk_type,tk := peek()) -> bool:
 
 ##generates an error and prints it to console
 func make_error(st:String) -> void:
-	var generic = 'Pre-processor error: \' %s \''
+	var generic = "Pre-processor error: ' %s '"
 	printerr(generic % st)
 	errors.push_back(st)
 	return 
