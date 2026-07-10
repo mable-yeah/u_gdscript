@@ -71,10 +71,10 @@ static func get_class_methods(name:String):
 	var base_class = get_base_class(name)
 	var method_list = ClassDB.class_get_method_list(base_class)
 	if base_class == name: return method_list
-	for class_list in ProjectSettings.get_global_class_list():
-		if class_list['class'] != name: continue
-		
-		var script = load(class_list['path'])
+	
+	var registry = loader_lang.global_class_registry.get(name,null)
+	if registry != null:
+		var script = load(registry['path'])
 		method_list.append_array(script.get_script_method_list())
 		return method_list
 	
@@ -88,9 +88,9 @@ static func get_base_class(class_n:String) -> String:
 	if class_list.has(class_n):
 		return class_n
 	
-	for class_data in ProjectSettings.get_global_class_list():
-		if class_data['class'] != class_n: continue
-		return class_data['base']
+	var registry = loader_lang.global_class_registry.get(class_n,null)
+	if registry != null:
+		return registry['base']
 	
 	printerr('could not get base class type of %s, this class may not exist or be registered' % class_n)
 	return ''

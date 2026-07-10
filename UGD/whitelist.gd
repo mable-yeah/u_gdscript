@@ -5,7 +5,6 @@ const list = [
 	'ColorRect',
 	'Time',
 	'Timer',
-	
 ]
 
 

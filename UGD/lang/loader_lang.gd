@@ -57,12 +57,18 @@ enum Type {
 	INDEX
 }
 
+static var global_class_registry:Dictionary[String,Dictionary]:
+	get():
+		if global_class_registry.is_empty():
+			build_global_class_list()
+		return global_class_registry
+
 
 static var global_class_list:PackedStringArray:
 	get():
-		if global_class_list.is_empty():
+		if global_class_registry.is_empty():
 			build_global_class_list()
-		return global_class_list
+		return global_class_registry.keys()
 
 static var class_list:PackedStringArray:
 	get():
@@ -76,14 +82,17 @@ static var built_in_types:Dictionary[String,Variant.Type] = {}:
 			build_built_in_types()
 		return built_in_types
 
+
+
+
 static func build_class_list():
 	class_list = ClassDB.get_class_list()
 
 static func build_global_class_list():
-	var class_packed:PackedStringArray
+	var class_packed:Dictionary[String,Dictionary] = {}
 	for class_data in ProjectSettings.get_global_class_list():
-		class_packed.append(class_data['class'])
-	global_class_list = class_packed
+		class_packed[class_data['class']] = class_data
+	global_class_registry = class_packed
 
 static func build_built_in_types():
 	var types:Dictionary[String,Variant.Type] = {}

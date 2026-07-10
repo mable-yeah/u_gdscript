@@ -181,7 +181,8 @@ func can_reduce(expr:AST.Expr) -> bool:
 			return can_reduce(expr.left) and can_reduce(expr.right)
 	return false
 
-
+##TODO, add in registering members for the object's class
+##this would allow stuff like pre-defined dictionarys and constants
 func visit_header():
 	if !lang_utilities.is_class_or_type(object_class,false,true):
 		make_error('ugd could not initialize, class type is invalid -> "%s"' % object_class)
@@ -437,34 +438,9 @@ func visit_function_call(expr:AST.function_call) -> u_type:
 	
 	if !ref.is_resolved():
 		ref.ast_expr.visit(self)
-
-
-	#varadic functions generally dont follow any typing througout
-	#but still visit the arguments to confirm they exist in the first place
-	if ref.varadic: 
-		for arg in expr.args: arg.visit(self)
-		return ref.hint 
 	
-	var param_s = ref.params.size() ; var arg_s = expr.args.size()
-	var err = 'few' if param_s > arg_s else 'many'
+	validate_function(ref,expr)
 	
-	
-	
-	if param_s != arg_s:
-		make_error('too %s arguments for call "%s"' % [err,name])
-		return utype(TYPE_NIL)
-	
-	var local_args:Array[u_type] = []
-	for arg in expr.args: 
-		var visit = arg.visit(self)
-		if !(visit is u_type): continue
-		local_args.append(visit)
-	
-	
-	if !ref.compare_params(local_args):
-		var err_arr = [ref.name,u_object.format_param(ref.params),u_object.format_param(local_args)]
-		make_error(errors.call_param % err_arr)
-		return utype(TYPE_NIL)
 	
 	if ref.name == 'add_child':
 		var meta_visit = expr.args[0].visit(self)
@@ -619,7 +595,7 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	
 	if data == null: 
 		var is_instanced = ref.hint.meta.has('orphaned')
-		data = ref.get_virtual_data(member,stmt.is_property) if is_instanced else {}
+		data = ref.get_virtual_data(member,stmt.is_property)
 		if !is_instanced and ref.hint.type == TYPE_OBJECT:
 			make_error('cannot call property/method -> "%s" on base "%s" as this object needs to be instanced first' % [member,ref.name])
 			return utype(TYPE_NIL)
@@ -628,16 +604,61 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 		make_error('property/method "%s" does not exist in -> "%s" on base of "%s"' % [member,ref.name,ref.hint_n])
 		return utype(TYPE_NIL)
 	
-	var return_type = TYPE_NIL
+	var return_type:u_type = utype(TYPE_NIL)
 	
-	if data.has('return'): return_type = data['return']['type']
-	elif data.has('type'): return_type = data['type']
+	#TODO currently any returned value from function calls here
+	#cant be assigned to a value, some of these we dont know their real type until runtime
+	#like 'array.get(0)' .. all arrays have variant typing
+	if data.has('return'): 
+		if stmt.member is AST.function_call:
+			var fn_sig = dict_to_sig(data)
+			if fn_sig != null:
+				return_type = validate_function(fn_sig,stmt.member)
+		
+	elif data.has('type'): return_type = utype(data['type'])
 	
 	if member == 'free' and ref.hint.meta.has('object_type'):
 		ref.hint.meta['freed'] = true
 		orphaned.erase(ref.hint)
 	
-	return utype(return_type)
+	return return_type
+
+
+func validate_function(ref:func_sig,expr:AST.function_call) -> u_type:
+	var name := expr.target.name
+	
+	#varadic functions generally dont follow any typing througout
+	#but still visit the arguments to confirm they exist in the first place
+	if ref.varadic: 
+		for arg in expr.args: arg.visit(self)
+		return ref.hint 
+	
+	var param_s = ref.params.size() ; var arg_s = expr.args.size()
+	var err = 'few' if param_s > arg_s else 'many'
+	
+	
+	
+	if param_s != arg_s:
+		make_error('too %s arguments for call "%s"' % [err,name])
+		return utype(TYPE_NIL)
+	
+	var local_args:Array[u_type] = []
+	for arg in expr.args: 
+		var visit = arg.visit(self)
+		if !(visit is u_type): continue
+		local_args.append(visit)
+	
+	
+	if !ref.compare_params(local_args):
+		var err_arr = [ref.name,u_object.format_param(ref.params),u_object.format_param(local_args)]
+		make_error(errors.call_param % err_arr)
+		return utype(TYPE_NIL)
+	
+	return ref.hint
+
+
+
+
 
 func type_string_(type) -> String:
 	if type is Variant.Type and type != TYPE_MAX:
@@ -645,18 +666,29 @@ func type_string_(type) -> String:
 	return '<null>'
 
 
+
 func register_class(p_class:String) -> Dictionary[String,func_sig]:
 	var registry:Dictionary[String,func_sig] = {}
 	var class_methods = lang_utilities.get_class_methods(p_class)
 	for method in class_methods:
-		var arguments:Array[u_type] = []
-		var hint = method.return.class_name
-		var type = type_string_(method.return.type) if hint.is_empty() else hint
-		
-		if type == 'Nil': type = 'void'
-		for arg in method.args: arguments.append(utype(arg.type))
-		registry[method.name] = func_sig.new(method.name,type,arguments,false)
+		var sig = dict_to_sig(method)
+		if sig == null: continue
+		registry[method.name] = sig
 	return registry
+
+
+func dict_to_sig(method:Dictionary):
+	if !method.has('return'): return null
+	var arguments:Array[u_type] = []
+	var hint = method.return.class_name
+	var type = type_string_(method.return.type) if hint.is_empty() else hint
+	
+	if type == 'Nil': type = 'void'
+	for arg in method.args: arguments.append(utype(arg.type))
+	return func_sig.new(method.name,type,arguments,false)
+
+
+
 
 class u_object:
 	var is_constant = false
@@ -728,6 +760,8 @@ class u_object:
 	#just straight bullshitting so i dont need two functions for this (like the old version)
 	func get_virtual_data(p_name:String,is_property:bool):
 		var list:Array ; var to_append:Array
+		if lang_utilities.is_builtin(hint_n): return get_method_builtin(p_name)
+		
 		if hint_n == '': return {}
 		list = ClassDB.class_get_property_list(hint_n) if is_property\
 		else lang_utilities.get_class_methods(hint_n)
@@ -743,6 +777,25 @@ class u_object:
 			return virtual
 		return {}
 	
+	
+	func get_method_builtin(p_name:String) -> Dictionary:
+		var conversion = {
+			'Array':u_Array,'Dictionary':u_Dictionary,
+			'Vector2':u_Vector2,'Vector2i':u_Vector2i,
+			'Vector3':u_Vector3,'Vector3i':u_Vector3i,
+			'Vector4':u_Vector4,'Vector4i':u_Vector4i,
+		}
+		
+		if hint_n in ['int','float']: return {}
+		
+		var binding_class = conversion.get(hint_n)
+		
+		if binding_class != null:
+			return binding_class.new().get_binding(p_name)
+		
+		if OS.has_feature("editor"):
+			printerr('unimplimented builtin %s' % hint_n)
+		return {}
 	
 	##returns true if objects match
 	func compare_object(ref:u_object):
@@ -765,7 +818,13 @@ class u_object:
 	##formats an array with types in it to a string, 'int,float'
 	static func format_param(p_param:Array[u_type]):
 		var p_st = []
-		for param in p_param: p_st.append(type_string(param.type))
+		for param in p_param:
+			var string = 'any'
+			if param.type is Variant.Type and param.type != TYPE_MAX:
+				string =  type_string(param.type)
+			
+			p_st.append(string)
+		
 		return ','.join(p_st)
 
 	func utype(p_type:Variant.Type):
