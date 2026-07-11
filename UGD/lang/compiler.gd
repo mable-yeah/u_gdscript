@@ -1,73 +1,5 @@
-class_name compiler extends AST.PROGRAM
+class_name compiler extends compiler_h
 ##handles AST analysis and re-compiling code into gd script
-
-
-
-const errors = {
-	'call_param':'a function call parameter of "%s" does not match its expected signature, expected "%s" got "%s"',
-	'signature':'function "%s" does not match its parent signature, "%s"',
-	'invalid_hint':'could not find type -> "%s"',
-	'unreachable':'unreachable code found in function "%s" after return',
-	'func':'a function typed "%s" cannot return -> "%s"',
-	'expected':'expected "%s" got -> "%s" instead in %s',
-	'ternary':'Values of the ternary operator are not mutually compatible. %s -> %s',
-	'assign':'invalid assignment from %s to %s',
-	'loop':'cannot use "%s" from outside of a loop',
-	'shadows':'%s shadows previously declared/internal class : "%s"',
-	'unresolved':'unresolved/orphan object found, .new() -> "%s" in "%s"',
-	'standalone':'Standalone expression (the line may have no effect) -> "%s"',
-	'object_assign':'value of type "%s" cannot be assigned to a variable of type "%s"',
-	'unimplemented':'"%s" call unimplemented',
-	'object_freed':'object "%s" was freed previously and cannot be addressed now -> "%s"',
-}
-
-var current_fn:u_object = null
-var current_v:u_object = null
-
-var loop_depth = 0
-
-var orphaned:Dictionary[u_type,Variant] = {}
-var scope:Array[Dictionary] = [{}]
-var jumped_scopes:Array[Dictionary]
-var jump_depth = 0
-
-
-var current_scope:Dictionary: 
-	get(): return scope.back()
-
-var has_errors := false
-var code:String = ''
-
-var object_class:String = ''
-var base_class:String = ''
-
-#'extends example class_name test'
-#object class becomes 'example'
-#base class becomes 'Node' (assuming example extends node)
-
-
-
-var signatures:Dictionary[String,func_sig] = {}
-
-var unmutables:Dictionary[String,func_sig] = {
-	'print':func_sig.new('print','void',[],true),
-	'printt':func_sig.new('printt','void',[],true),
-	'printerr':func_sig.new('printerr','void',[],true),
-	'Vector2':func_sig.new('Vector2','Vector2',[utype(TYPE_FLOAT),utype(TYPE_FLOAT)]),
-	'Vector2i':func_sig.new('Vector2i','Vector2',[utype(TYPE_INT),utype(TYPE_INT)]),
-	'Color':func_sig.new('Color','Color',[utype(TYPE_FLOAT),utype(TYPE_FLOAT),utype(TYPE_FLOAT),utype(TYPE_FLOAT)]),
-	'randf':func_sig.new('randf','float',[],false),
-	'randi':func_sig.new('randi','int',[],false),
-	'range':func_sig.new('range','Array',[utype(TYPE_INT),utype(TYPE_INT)],false),
-	'str':func_sig.new('str','String',[],true),
-}
-
-
-func make_error(st:String) -> void:
-	has_errors = true
-	var generic = 'Compiler error: \' %s \''
-	printerr(generic % st)
-
 
 func _init(p_ast:AST.PROGRAM,base_className:String) -> void:
 	object_class = base_className
@@ -94,8 +26,11 @@ func visit_code():
 
 	for sig in unmutables.values():
 		sig.resolve() ; current_scope[sig.name] = sig
-
-
+	
+	
+	#for property in 
+	
+	
 	for expression in (globals + misc + functions):
 		expression.visit(self) 
 		##visit calls one of the cooresponding functions here
@@ -181,8 +116,6 @@ func can_reduce(expr:AST.Expr) -> bool:
 			return can_reduce(expr.left) and can_reduce(expr.right)
 	return false
 
-##TODO, add in registering members for the object's class
-##this would allow stuff like pre-defined dictionarys and constants
 func visit_header():
 	if !lang_utilities.is_class_or_type(object_class,false,true):
 		make_error('ugd could not initialize, class type is invalid -> "%s"' % object_class)
@@ -194,6 +127,9 @@ func visit_header():
 		unmutables['add_child'] = func_sig.new('add_child','void',[utype(TYPE_OBJECT)])
 	
 	signatures.merge(register_class(object_class))
+	
+	current_scope.merge(register_class_properties(object_class))
+	
 	
 	if class_n != '':
 		if !shadows_declared(class_n): return
@@ -498,6 +434,8 @@ func visit_pass(_stmt:AST.pass_Statement):
 	return utype(TYPE_NIL)
 
 
+#TODO currently arrays and dictionarys rely on being defined through a variable
+#this blocks for i [0,0,0] as it throws a standalone warning
 func visit_array(expr:AST.array) -> u_type:
 	if current_v == null:  make_error(errors.standalone % 'array') ; return utype(TYPE_ARRAY)
 	
@@ -606,9 +544,9 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	
 	var return_type:u_type = utype(TYPE_NIL)
 	
-	#TODO currently any returned value from function calls here
-	#cant be assigned to a value, some of these we dont know their real type until runtime
-	#like 'array.get(0)' .. all arrays have variant typing
+	#TODO currently some returned function calls dont get registered as 
+	#variables as they have variant returns/TYPE_MAX, ideally i need to figure out how to assign a 
+	#new non-placeholder value
 	if data.has('return'): 
 		if stmt.member is AST.function_call:
 			var fn_sig = dict_to_sig(data)
@@ -623,29 +561,32 @@ func visit_member_call(stmt:AST.member_Call) -> u_type:
 	
 	return return_type
 
-
 func validate_function(ref:func_sig,expr:AST.function_call) -> u_type:
 	var name := expr.target.name
+	const void_err = 'cannot use a function or value that returns "void" inside of a call (%s) argument -> %s'
 	
 	#varadic functions generally dont follow any typing througout
 	#but still visit the arguments to confirm they exist in the first place
 	if ref.varadic: 
-		for arg in expr.args: arg.visit(self)
+		for i in expr.args.size(): 
+			var arg = expr.args[i]
+			var visit = arg.visit(self)
+			if visit.type == TYPE_MAX: make_error(void_err % [name,i])
 		return ref.hint 
 	
 	var param_s = ref.params.size() ; var arg_s = expr.args.size()
 	var err = 'few' if param_s > arg_s else 'many'
-	
-	
 	
 	if param_s != arg_s:
 		make_error('too %s arguments for call "%s"' % [err,name])
 		return utype(TYPE_NIL)
 	
 	var local_args:Array[u_type] = []
-	for arg in expr.args: 
+	for i in expr.args.size(): 
+		var arg = expr.args[i]
 		var visit = arg.visit(self)
 		if !(visit is u_type): continue
+		if visit.type == TYPE_MAX: make_error(void_err % [name,i])
 		local_args.append(visit)
 	
 	
@@ -655,198 +596,3 @@ func validate_function(ref:func_sig,expr:AST.function_call) -> u_type:
 		return utype(TYPE_NIL)
 	
 	return ref.hint
-
-
-
-
-
-func type_string_(type) -> String:
-	if type is Variant.Type and type != TYPE_MAX:
-		return type_string(type)
-	return '<null>'
-
-
-
-func register_class(p_class:String) -> Dictionary[String,func_sig]:
-	var registry:Dictionary[String,func_sig] = {}
-	var class_methods = lang_utilities.get_class_methods(p_class)
-	for method in class_methods:
-		var sig = dict_to_sig(method)
-		if sig == null: continue
-		registry[method.name] = sig
-	return registry
-
-
-func dict_to_sig(method:Dictionary):
-	if !method.has('return'): return null
-	var arguments:Array[u_type] = []
-	var hint = method.return.class_name
-	var type = type_string_(method.return.type) if hint.is_empty() else hint
-	
-	if type == 'Nil': type = 'void'
-	for arg in method.args: arguments.append(utype(arg.type))
-	return func_sig.new(method.name,type,arguments,false)
-
-
-
-
-class u_object:
-	var is_constant = false
-	var name:String
-	
-	#its worth noting TYPE_MAX, is essentially used like 'TYPE_ANY'
-	var hint:u_type ; var hint_n:String
-	
-	var ast_expr:AST.Expr
-	
-	
-	var params:Array[u_type] = []
-	var varadic := false
-	
-	var resolved := false
-	
-	var meta := {}
-	
-	func _init(p_name:String,expr:AST.Expr = null) -> void:
-		name = p_name
-		ast_expr = expr
-	
-	func is_resolved(): return resolved
-	func resolve(): resolved = true
-	
-	
-	func resolve_hint(tk_hint:TOKENS.token = null,allow_classes = false) -> bool:
-		var valid := true
-		var hint_st := lang_utilities.get_type_hint(tk_hint)
-		valid = resolve_hint_name(hint_st if tk_hint != null else hint_n)
-		if !valid and allow_classes:
-			valid = resolve_hint_as_class()
-		return valid
-	
-
-	
-	func resolve_hint_name(hint_st := hint_n):
-		var valid := true
-		var resolved_tk:Variant.Type = lang_utilities.get_builtin_type(hint_st)
-		if resolved_tk == TYPE_MAX and hint_st != '':
-			if hint_st != 'void':
-				valid = false
-			else: 
-				hint = utype(TYPE_NIL)
-		
-		hint = utype(resolved_tk)
-		hint_n = hint_st
-		
-		return valid
-	
-	func resolve_hint_as_class() -> bool:
-		var n_is_class = lang_utilities.is_class_or_type(hint_n,false,false)
-		
-		if !ClassDB.class_exists(hint_n): return false
-		
-		if !ClassDB.can_instantiate(hint_n): return false
-		
-		if hint_n == 'RefCounted' || ClassDB.get_inheriters_from_class('RefCounted').has(hint_n): 
-			return false
-		
-		if !n_is_class: return false
-		
-		if !Whitelist.available(hint_n): return false
-		
-		#im pretty sure if it can be instanced its an object!!
-		hint = utype(TYPE_OBJECT)
-		return true
-	
-	#just straight bullshitting so i dont need two functions for this (like the old version)
-	func get_virtual_data(p_name:String,is_property:bool):
-		var list:Array ; var to_append:Array
-		if lang_utilities.is_builtin(hint_n): return get_method_builtin(p_name)
-		
-		if hint_n == '': return {}
-		list = ClassDB.class_get_property_list(hint_n) if is_property\
-		else lang_utilities.get_class_methods(hint_n)
-		
-		to_append = ClassDB.class_get_property_list('GDScript') if is_property\
-		else ClassDB.class_get_method_list('GDScript')
-		
-		#if is_property: list.append_array(ClassDB.class_get_signal_list(hint_n))
-		
-		list.append_array(to_append)
-		for virtual in list:
-			if virtual.get('name',null) != p_name: continue
-			return virtual
-		return {}
-	
-	
-	func get_method_builtin(p_name:String) -> Dictionary:
-		var conversion = {
-			'Array':u_Array,'Dictionary':u_Dictionary,
-			'Vector2':u_Vector2,'Vector2i':u_Vector2i,
-			'Vector3':u_Vector3,'Vector3i':u_Vector3i,
-			'Vector4':u_Vector4,'Vector4i':u_Vector4i,
-		}
-		
-		if hint_n in ['int','float']: return {}
-		
-		var binding_class = conversion.get(hint_n)
-		
-		if binding_class != null:
-			return binding_class.new().get_binding(p_name)
-		
-		if OS.has_feature("editor"):
-			printerr('unimplimented builtin %s' % hint_n)
-		return {}
-	
-	##returns true if objects match
-	func compare_object(ref:u_object):
-		var hint_valid = hint_n == ref.hint_n ; var name_valid = name == ref.name
-		if ref.hint_n == 'void' and hint_n == '': hint_valid = true
-		return hint_valid && name_valid && compare_params(ref.params)
-	
-	##compares params with p_param
-	func compare_params(p_param:Array[u_type]) -> bool:
-		var valid := true ; var i := 0
-		if params.size() != p_param.size(): return false
-		while i < params.size():
-			var left_param = params[i].type ; var right_param = p_param[i].type
-			var is_valid = left_param != right_param and left_param != TYPE_MAX
-			if is_valid and !lang_utilities.can_convert(left_param,right_param):
-				valid = false ; break
-			i += 1
-		return valid
-	
-	##formats an array with types in it to a string, 'int,float'
-	static func format_param(p_param:Array[u_type]):
-		var p_st = []
-		for param in p_param:
-			var string = 'any'
-			if param.type is Variant.Type and param.type != TYPE_MAX:
-				string =  type_string(param.type)
-			
-			p_st.append(string)
-		
-		return ','.join(p_st)
-
-	func utype(p_type:Variant.Type):
-		return u_type.new(p_type)
-
-
-#this helps with defining abstract/placeholder functions
-class func_sig extends u_object:
-	func _init(p_name:String,type_hint:String,p_param:Array[u_type],p_varadic = false) -> void:
-		name = p_name ; params = p_param ; varadic = p_varadic ; hint_n = type_hint
-		resolve_hint(null,true)
-	
-	##returns function as 'func_name(param_type) -> return_type'
-	func sig_string() -> String:
-		return '%s(%s) -> %s' % [name,format_param(params),hint_n]
-
-func utype(p_type:Variant.Type):
-	return u_type.new(p_type)
-
-class u_type:
-	var type:Variant.Type
-	var meta:Dictionary
-	
-	func _init(p_type:Variant.Type):
-		type = p_type 

@@ -82,6 +82,23 @@ static func get_class_methods(name:String):
 	return [{}]
 
 
+static func get_class_properties(name:String):
+	if !is_class_or_type(name,true,true):
+		return [{}]
+	
+	var base_class = get_base_class(name)
+	var method_list = ClassDB.class_get_property_list(base_class)
+	if base_class == name: return method_list
+	
+	var registry = loader_lang.global_class_registry.get(name,null)
+	if registry != null:
+		var script = load(registry['path'])
+		method_list.append_array(script.get_script_property_list())
+		return method_list
+	
+	printerr('could not get globally declared class properties %s' % name)
+	return [{}]
+
 
 static func get_base_class(class_n:String) -> String:
 	var class_list = loader_lang.class_list
